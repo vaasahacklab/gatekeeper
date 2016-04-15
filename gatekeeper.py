@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import daemon   #to deamonize this script
 import serial   #serial communication
 import re       #regular expressions
 import logging  #hmm what could this be for?
@@ -20,14 +19,14 @@ logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
 
 #setup GPIO output pins
-lukko = 12
-valot = 16
+lock = 12
+lights = 16
 modem_power = 17
 modem_reset = 18
 
 #setup GPIO input pins
-valotieto = 5
-salpa = 6
+lightstatus = 5
+latch = 6
 
 class Pin:
   #init (activate pin)
@@ -36,56 +35,40 @@ class Pin:
     # use BCM chip pin numbering convention
     GPIO.setmode(GPIO.BCM)
     # Set up the GPIO channels
-    GPIO.setup(lukko, GPIO.OUT)
-    GPIO.output(lukko, GPIO.LOW)
-    log.debug("initialized lukko, pin to low")
-    GPIO.setup(valot, GPIO.OUT)
-    GPIO.output(valot, GPIO.LOW)
-    log.debug("initialized valot, pin to low")
+    GPIO.setup(lock, GPIO.OUT)
+    GPIO.output(lock, GPIO.HIGH)
+    log.debug("initialized lock, pin to high")
+    GPIO.setup(lights, GPIO.OUT)
+    GPIO.output(lights, GPIO.HIGH)
+    log.debug("initialized lights, pin to high")
     GPIO.setup(modem_power, GPIO.OUT)
     GPIO.output(modem_power, GPIO.LOW)
     log.debug("initialized modem_power, pin to low")
     GPIO.setup(modem_reset, GPIO.OUT)
     GPIO.output(modem_reset, GPIO.LOW)
     log.debug("initialized modem_reset, pin to low")
-
-    GPIO.setup(20, GPIO.OUT)
-    GPIO.output(20, GPIO.LOW)
-    GPIO.setup(21, GPIO.OUT)
-    GPIO.output(21, GPIO.LOW)
-
   
-  def lukkohigh(self):
-    GPIO.output(lukko, GPIO.HIGH)
-    log.debug("lukko to high")
+  def lockopen(self):
+    GPIO.output(lock, GPIO.LOW)
+    log.debug("lock to open")
 
-    GPIO.output(16, GPIO.HIGH)
-    GPIO.output(20, GPIO.HIGH)
-    GPIO.output(21, GPIO.HIGH)
+  def lockclose(self):
+    GPIO.output(lock, GPIO.HIGH)
+    log.debug("lock to close")
 
+  def lightson(self):
+    GPIO.output(lights, GPIO.LOW)
+    log.debug("lights to on")
 
-  def lukkolow(self):
-    GPIO.output(lukko, GPIO.LOW)
-    log.debug("lukko to low")
+  def lightsoff(self):
+    GPIO.output(lights, GPIO.HIGH)
+    log.debug("lights to off")
 
-    GPIO.output(16, GPIO.LOW)
-    GPIO.output(20, GPIO.LOW)
-    GPIO.output(21, GPIO.LOW)
-
-
-  def valothigh(self):
-    GPIO.output(valot, GPIO.HIGH)
-    log.debug("valot to high")
-
-  def valotlow(self):
-    GPIO.output(valot, GPIO.LOW)
-    log.debug("valot to low")
-
-  def send_pulse_lukko(self):
-    self.lukkohigh()
+  def send_pulse_lock(self):
+    self.lockopen()
     #keep pulse high for 5.5 second
     time.sleep(5.5)
-    self.lukkolow()
+    self.lockclose()
     log.debug("Pulse done")
     
 class GateKeeper:
@@ -94,11 +77,11 @@ class GateKeeper:
     self.read_whitelist()
     self.modem_power_on()    
     self.enable_caller_id()
-    self.data_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True)
+    self.data_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.1)
 
   def url_log(self, name, number):
     try:
-      r = requests.get('http://mikeful.kapsi.fi/vaasahacklab/log/' + number + '/' + name)
+      r = requests.get('https://mikeful.kapsi.fi/vaasahacklab/log/' + number + '/' + name)
     except:
       log.debug('failed url')
 
@@ -158,9 +141,11 @@ class GateKeeper:
     if not buffer:
       log.debug("Powering on modem")
       GPIO.output(modem_power, GPIO.HIGH)
-      time.sleep(1.2)
+      while True:
+        if command_channel.readline(command_channel.inWaiting()).strip() == "RDY":
+         log.debug("Modem powered on")
+         break
       GPIO.output(modem_power, GPIO.LOW)
-      time.sleep(2)
     else:
       log.debug("Modem already powered")
 
@@ -179,9 +164,17 @@ class GateKeeper:
       time.sleep(1.2)
       GPIO.output(modem_power, GPIO.LOW)
 
+  def modem_reset(self):
+    log.debug("Resseting modem")
+    GPIO.output(modem_reset, GPIO.HIGH)
+    time.sleep(0.2)
+    GPIO.output(modem_reset, GPIO.LOW)
+
   def wait_for_call(self):
     self.data_channel.isOpen()
     call_id_pattern = re.compile('.*CLIP.*"([0-9]+)",.*')
+    creg_pattern = re.compile('.*CREG.*0,[^1]')
+    lastTime = time.time()
     while True:
       time.sleep(0.1) # Sleep for a 100 millseconds, no need to consume all CPU
       buffer = self.data_channel.readline(self.data_channel.inWaiting())
@@ -193,12 +186,21 @@ class GateKeeper:
         print call_id_match.groups()
         number = call_id_match.group(1)
         self.handle_call(number)
-  
+      if creg_pattern.match(buffer):
+        log.debug("Not connected with line \n"+buffer)
+        self.modem_reset()
+
+      currentTime = time.time()
+      diff = currentTime - lastTime
+      if diff > 60:
+        self.data_channel.write("AT+CREG?"+"\r\n")
+        lastTime = currentTime
+
   def handle_call(self,number):
     log.debug(number)
     if number in self.whitelist:
       self.hangup()
-      self.pin.send_pulse_lukko()
+      self.pin.send_pulse_lock()
       log.info("Opened the gate for " + self.whitelist[number] + " (" + number + ").")
       self.url_log(self.whitelist[number],number)
     else:
@@ -209,16 +211,13 @@ class GateKeeper:
   def stop_gatekeeping(self):
     self.data_channel.close()
     #set pin to default state?
-    self.pin.lukkolow()
-    self.pin.valotlow()
+    self.pin.lockclose()
+    self.pin.lightoff()
     self.modem_power_off()
     time.sleep(0.5)
     GPIO.cleanup()
     log.debug("Cleanup finished.") 
     
-
-#make this process a deamon
-#daemon.daemonize("/tmp/gatekeeper.pid")
 
 logging.info("Started GateKeeper.")
 
