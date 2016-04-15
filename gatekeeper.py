@@ -23,10 +23,15 @@ lock = 12
 lights = 16
 modem_power = 17
 modem_reset = 18
+out3 = 20
+out4 = 21
 
 #setup GPIO input pins
 lightstatus = 5
 latch = 6
+in3 = 13
+in4 = 19
+in5 = 26
 
 class Pin:
   #init (activate pin)
@@ -34,19 +39,38 @@ class Pin:
     GPIO.cleanup()
     # use BCM chip pin numbering convention
     GPIO.setmode(GPIO.BCM)
-    # Set up the GPIO channels
+    # Set up GPIO input channels
+    # Light on/off status
+    GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    # Door latch open/locked status
+    GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    # Currently unused inputs on input-relay board. initialize them anyway
+    GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+
+    # Set up GPIO output channels
+    # Lock
     GPIO.setup(lock, GPIO.OUT)
     GPIO.output(lock, GPIO.HIGH)
     log.debug("initialized lock, pin to high")
+    # Lights
     GPIO.setup(lights, GPIO.OUT)
     GPIO.output(lights, GPIO.HIGH)
     log.debug("initialized lights, pin to high")
+    # Modem power button
     GPIO.setup(modem_power, GPIO.OUT)
     GPIO.output(modem_power, GPIO.LOW)
     log.debug("initialized modem_power, pin to low")
+    # Modem reset button
     GPIO.setup(modem_reset, GPIO.OUT)
     GPIO.output(modem_reset, GPIO.LOW)
     log.debug("initialized modem_reset, pin to low")
+    # Currently unused outputs on output-relay board, initialize them anyway
+    GPIO.setup(out3, GPIO.OUT)
+    GPIO.output(out3, GPIO.HIGH)
+    GPIO.setup(out4, GPIO.OUT)
+    GPIO.output(out4, GPIO.HIGH)
   
   def lockopen(self):
     GPIO.output(lock, GPIO.LOW)
@@ -165,7 +189,7 @@ class GateKeeper:
       GPIO.output(modem_power, GPIO.LOW)
 
   def modem_reset(self):
-    log.debug("Resseting modem")
+    log.debug("Reseting modem")
     GPIO.output(modem_reset, GPIO.HIGH)
     time.sleep(0.2)
     GPIO.output(modem_reset, GPIO.LOW)
@@ -212,7 +236,7 @@ class GateKeeper:
     self.data_channel.close()
     #set pin to default state?
     self.pin.lockclose()
-    self.pin.lightoff()
+    self.pin.lightsoff()
     self.modem_power_off()
     time.sleep(0.5)
     GPIO.cleanup()
