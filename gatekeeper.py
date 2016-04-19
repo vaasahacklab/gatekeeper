@@ -1,24 +1,24 @@
 #!/usr/bin/python
 
-import serial   #serial communication
-import re       #regular expressions
-import logging  #hmm what could this be for?
-import os       #to call external stuff
-import signal  #catch kill signall
-import time     #for the sleep function
-import select  #for select.error
-from errno import EINTR #read interrupt
-import traceback #for stacktrace
-import RPi.GPIO as GPIO
+import serial           # Serial communication
+import re               # Regular expressions
+import logging          # Hmm what could this be for?
+import os               # To call external stuff
+import signal           # Catch kill signal
+import time             # For the sleep function
+import select           # For select.error
+from errno import EINTR # Read interrupt
+import traceback        # For stacktrace
+import RPi.GPIO as GPIO # For using Raspberry Pi GPIO
 import requests
 
-#setup logging
+# Setup logging
 LOG_FILENAME = '/home/ovi/gatekeeper/gatekeeper.log'
 FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
 
-#setup GPIO output pins
+# Setup GPIO output pins
 lock = 12
 lights = 16
 modem_power = 17
@@ -26,24 +26,25 @@ modem_reset = 18
 out3 = 20
 out4 = 21
 
-#setup GPIO input pins
-lightstatus = 5
-latch = 6
+# Setup GPIO input pins
+latch = 5
+lightstatus = 6
 in3 = 13
 in4 = 19
 in5 = 26
 
 class Pin:
-  #init (activate pin)
+  # Init (activate pin)
   def __init__(self):
-    GPIO.cleanup()
-    # use BCM chip pin numbering convention
+    # Use BCM chip pin numbering convention
     GPIO.setmode(GPIO.BCM)
+
     # Set up GPIO input channels
     # Light on/off status
     GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     # Door latch open/locked status
     GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.add_event_detect(latch, GPIO.BOTH, self.latch_moved, bouncetime=100)
     # Currently unused inputs on input-relay board. initialize them anyway
     GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
@@ -51,50 +52,50 @@ class Pin:
 
     # Set up GPIO output channels
     # Lock
-    GPIO.setup(lock, GPIO.OUT)
-    GPIO.output(lock, GPIO.HIGH)
+    GPIO.setup(lock, GPIO.OUT, initial=GPIO.HIGH)
     log.debug("initialized lock, pin to high")
     # Lights
-    GPIO.setup(lights, GPIO.OUT)
-    GPIO.output(lights, GPIO.HIGH)
+    GPIO.setup(lights, GPIO.OUT, initial=GPIO.HIGH)
     log.debug("initialized lights, pin to high")
     # Modem power button
-    GPIO.setup(modem_power, GPIO.OUT)
-    GPIO.output(modem_power, GPIO.LOW)
+    GPIO.setup(modem_power, GPIO.OUT, initial=GPIO.LOW)
     log.debug("initialized modem_power, pin to low")
     # Modem reset button
-    GPIO.setup(modem_reset, GPIO.OUT)
-    GPIO.output(modem_reset, GPIO.LOW)
+    GPIO.setup(modem_reset, GPIO.OUT, initial=GPIO.LOW)
     log.debug("initialized modem_reset, pin to low")
     # Currently unused outputs on output-relay board, initialize them anyway
-    GPIO.setup(out3, GPIO.OUT)
-    GPIO.output(out3, GPIO.HIGH)
-    GPIO.setup(out4, GPIO.OUT)
-    GPIO.output(out4, GPIO.HIGH)
+    GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
+    GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
   
   def lockopen(self):
     GPIO.output(lock, GPIO.LOW)
-    log.debug("lock to open")
+    log.debug("Opened lock")
 
   def lockclose(self):
     GPIO.output(lock, GPIO.HIGH)
-    log.debug("lock to close")
+    log.debug("Closed lock")
 
   def lightson(self):
     GPIO.output(lights, GPIO.LOW)
-    log.debug("lights to on")
+    log.debug("Lights to on")
 
   def lightsoff(self):
     GPIO.output(lights, GPIO.HIGH)
-    log.debug("lights to off")
+    log.debug("Lights to off")
 
   def send_pulse_lock(self):
     self.lockopen()
-    #keep pulse high for 5.5 second
+    # Keep pulse high for 5.5 second
     time.sleep(5.5)
     self.lockclose()
     log.debug("Pulse done")
-    
+
+  def latch_moved(channel, event):
+    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
+      log.debug('Door latch opened')
+    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
+      log.debug('Door latch closed')
+
 class GateKeeper:
   def __init__(self):
     self.pin = Pin()
@@ -140,7 +141,7 @@ class GateKeeper:
   def hangup(self):
     command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True)
     command_channel.isOpen()
-    command_channel.write("AT+HVOIC" + "\r\n") #Disconnect only voice call (instead W/ data)
+    command_channel.write("AT+HVOIC" + "\r\n") # Disconnect only voice call (for example keep possible existing dataconnection online)
     command_channel.close()
     log.debug("Hung up")
 
@@ -233,12 +234,11 @@ class GateKeeper:
       self.url_log("DENIED",number)
       
   def stop_gatekeeping(self):
-    self.data_channel.close()
-    #set pin to default state?
     self.pin.lockclose()
     self.pin.lightsoff()
     self.modem_power_off()
-    time.sleep(0.5)
+    self.data_channel.close()
+    time.sleep(0.1)
     GPIO.cleanup()
     log.debug("Cleanup finished.") 
     

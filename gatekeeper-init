@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 # /etc/init.d/gatekeeper
 # gatekeeper	initscript for the gatekeeper package
 #		Copr. 2016 by Vaasa Hacklab <info@vaasa.hacklab.fi>
