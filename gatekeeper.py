@@ -167,10 +167,17 @@ class GateKeeper:
       log.debug("Powering on modem")
       GPIO.output(modem_power, GPIO.HIGH)
       while True:
-        if command_channel.readline(command_channel.inWaiting()).strip() == "RDY":
+	line = command_channel.readline().strip()
+        if line == "RDY":
          log.debug("Modem powered on")
          break
       GPIO.output(modem_power, GPIO.LOW)
+      log.debug("Waiting modem to be call ready")
+      while True:
+	line = command_channel.readline().strip()
+        if line == "Call Ready":
+         log.debug("Modem call ready")
+         break
     else:
       log.debug("Modem already powered")
 
@@ -186,7 +193,11 @@ class GateKeeper:
     else:
       log.debug("Powering off modem")
       GPIO.output(modem_power, GPIO.HIGH)
-      time.sleep(1.2)
+      while True:
+	line = command_channel.readline().strip()
+        if line == "NORMAL POWER DOWN":
+         log.debug("Modem powered off")
+         break
       GPIO.output(modem_power, GPIO.LOW)
 
   def modem_reset(self):
