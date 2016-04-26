@@ -1,16 +1,19 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
-import serial           # Serial communication
-import re               # Regular expressions
-import logging          # Hmm what could this be for?
-import os               # To call external stuff
-import signal           # Catch kill signal
-import time             # For the sleep function
-import select           # For select.error
-from errno import EINTR # Read interrupt
-import traceback        # For stacktrace
-import RPi.GPIO as GPIO # For using Raspberry Pi GPIO
-import requests
+import serial                # Serial communication
+import re                    # Regular expressions
+import logging               # Hmm what could this be for?
+import os                    # To call external stuff
+import sys                   # System calls
+import signal                # Catch kill signal
+import time                  # For the sleep function
+import select                # For select.error
+from errno import EINTR      # Read interrupt
+import traceback             # For stacktrace
+import RPi.GPIO as GPIO      # For using Raspberry Pi GPIO
+from threading import Thread # For enabling multitasking
+import requests              # HTTP library
 
 # Setup logging
 LOG_FILENAME = '/home/ovi/gatekeeper/gatekeeper.log'
@@ -44,7 +47,7 @@ class Pin:
     GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     # Door latch open/locked status
     GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.add_event_detect(latch, GPIO.BOTH, self.latch_moved, bouncetime=100)
+    GPIO.add_event_detect(latch, GPIO.BOTH, self.latch_moved)
     # Currently unused inputs on input-relay board. initialize them anyway
     GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
@@ -88,7 +91,7 @@ class Pin:
     # Keep pulse high for 5.5 second
     time.sleep(5.5)
     self.lockclose()
-    log.debug("Pulse done")
+    log.debug("Lock opening pulse done")
 
   def latch_moved(channel, event):
     if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
@@ -102,13 +105,12 @@ class GateKeeper:
     self.read_whitelist()
     self.modem_power_on()    
     self.enable_caller_id()
-    self.data_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.1)
 
   def url_log(self, name, number):
     try:
       r = requests.get('https://mikeful.kapsi.fi/vaasahacklab/log/' + number + '/' + name)
     except:
-      log.debug('failed url')
+      log.debug('failed url for remote log')
 
   def dingdong(self):
     try:
@@ -150,19 +152,25 @@ class GateKeeper:
       self.wait_for_call()
     except select.error, v:
       if v[0] == EINTR:
-        log.debug("Interrupt while waiting for call, cleanup should be done.")
+        log.debug("Caught EINTR")
       else:
         raise
     else:
       log.warning("Unexpected exception, shutting down!")
+    finally:
+      log.debug("Stopping GateKeeper")
+      gatekeeper.stop_gatekeeping()
+      log.debug("Shutdown tasks completed")
+      log.info("GateKeeper Stopped")
+      
   
   def modem_power_on(self):
+    self.data_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.1)
     command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.2)
     command_channel.isOpen()
     command_channel.write("AT"+"\r\n")
     command_channel.readline()
-    buffer = command_channel.readline(command_channel.inWaiting())
-    log.debug(buffer)
+    buffer = command_channel.readline()
     if not buffer:
       log.debug("Powering on modem")
       GPIO.output(modem_power, GPIO.HIGH)
@@ -186,8 +194,7 @@ class GateKeeper:
     command_channel.isOpen()
     command_channel.write("AT"+"\r\n")
     command_channel.readline()
-    buffer = command_channel.readline(command_channel.inWaiting())
-    log.debug(buffer)
+    buffer = command_channel.readline()
     if not buffer:
       log.debug("Modem already powered off")
     else:
@@ -199,29 +206,30 @@ class GateKeeper:
          log.debug("Modem powered off")
          break
       GPIO.output(modem_power, GPIO.LOW)
+      self.data_channel.close()
 
   def modem_reset(self):
     log.debug("Reseting modem")
     GPIO.output(modem_reset, GPIO.HIGH)
-    time.sleep(0.2)
+    time.sleep(0.5)
     GPIO.output(modem_reset, GPIO.LOW)
 
   def wait_for_call(self):
     self.data_channel.isOpen()
-    call_id_pattern = re.compile('.*CLIP.*"([0-9]+)",.*')
+    call_id_pattern = re.compile('.*CLIP: "(.*?)",.*')
     creg_pattern = re.compile('.*CREG.*0,[^1]')
     lastTime = time.time()
     while True:
       time.sleep(0.1) # Sleep for a 100 millseconds, no need to consume all CPU
-      buffer = self.data_channel.readline(self.data_channel.inWaiting())
+      buffer = self.data_channel.readline()
       call_id_match = call_id_pattern.match(buffer)
 ##
 #      log.debug("Data from data channel: " +buffer.strip())
 ##
       if call_id_match:
-        print call_id_match.groups()
         number = call_id_match.group(1)
         self.handle_call(number)
+
       if creg_pattern.match(buffer):
         log.debug("Not connected with line \n"+buffer)
         self.modem_reset()
@@ -235,34 +243,58 @@ class GateKeeper:
   def handle_call(self,number):
     log.debug(number)
     if number in self.whitelist:
-      self.hangup()
-      self.pin.send_pulse_lock()
+      # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+      hangup = Thread(target=self.hangup, args=())
+      lock_pulse = Thread(target=self.pin.send_pulse_lock, args=())
+      url_log = Thread(target=self.url_log, args=(self.whitelist[number],number))
+      # Execute letting people in -tasks
+      hangup.start()
+      lock_pulse.start()
+      url_log.start()
       log.info("Opened the gate for " + self.whitelist[number] + " (" + number + ").")
-      self.url_log(self.whitelist[number],number)
+      # Wait tasks to finish
+      hangup.join()
+      lock_pulse.join()
+      url_log.join()
     else:
-      log.info("Did not open the gate for "  + number + ", number  is not kown.")
-      self.dingdong()
-      self.url_log("DENIED",number)
+      if number == "":
+        number = "Hidden number"
+      log.info("Did not open the gate for "  + number + ", number is not kown.")
+      # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+      dingdong = Thread(target=self.dingdong, args=())
+      url_log = Thread(target=self.url_log, args=("DENIED",number))
+      # Ring the bell and log denied number 
+      dingdong.start()
+      url_log.start()
+      # Wait tasks to finish
+      dingdong.join()
+      url_log.join()
       
   def stop_gatekeeping(self):
-    self.pin.lockclose()
-    self.pin.lightsoff()
-    self.modem_power_off()
-    self.data_channel.close()
-    time.sleep(0.1)
+    # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+    closelock = Thread(target=self.pin.lockclose, args=())
+    lightsoff = Thread(target=self.pin.lightsoff, args=())
+    modemoff = Thread(target=self.modem_power_off, args=())
+    # Do shutting down tasks
+    closelock.start()
+    lightsoff.start()
+    modemoff.start()
+    # Wait tasks to finish
+    closelock.join()
+    lightsoff.join()
+    modemoff.join()
+    # Undo all GPIO setups we have done
     GPIO.cleanup()
-    log.debug("Cleanup finished.") 
-    
 
-logging.info("Started GateKeeper.")
+
+logging.info("Started GateKeeper")
 
 gatekeeper = GateKeeper()
 
 def shutdown_handler(signum, frame):
-    gatekeeper.stop_gatekeeping()
-    log.info("Stopping GateKeeper.") 
+  sys.exit(0)
 
 signal.signal(signal.SIGINT, shutdown_handler)
-signal.signal(signal.SIGTERM,shutdown_handler)
+signal.signal(signal.SIGTERM, shutdown_handler)
 
 gatekeeper.start()
