@@ -216,7 +216,7 @@ class GateKeeper:
 
   def wait_for_call(self):
     self.data_channel.isOpen()
-    call_id_pattern = re.compile('.*CLIP: "(.*?)",.*')
+    call_id_pattern = re.compile('^\+CLIP:[^"]+"(\d*?)"')
     creg_pattern = re.compile('.*CREG.*0,[^1]')
     lastTime = time.time()
     while True:
@@ -258,7 +258,7 @@ class GateKeeper:
       url_log.join()
     else:
       if number == "":
-        number = "Hidden number"
+        number = "Hidden"
       log.info("Did not open the gate for "  + number + ", number is not kown.")
       # Setup thread names, need to figure out better place and way to do this, but for now This Works™
       dingdong = Thread(target=self.dingdong, args=())
@@ -295,6 +295,6 @@ def shutdown_handler(signum, frame):
   sys.exit(0)
 
 signal.signal(signal.SIGINT, shutdown_handler)
-signal.signal(signal.SIGTERM, shutdown_handler)
+signal.signal(signal.SIGTERM,shutdown_handler)
 
 gatekeeper.start()
