@@ -36,6 +36,95 @@ in3 = 13
 in4 = 19
 in5 = 26
 
+# Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
+# Data port (Can be same or diffirent as command port)
+data_port = '/dev/ttyAMA0'
+data_baudrate = 115200
+data_parity = serial.PARITY_ODD
+data_stopbits = serial.STOPBITS_ONE
+data_bytesize = serial.EIGHTBITS
+data_xonxoff = True
+data_rtscts = False
+data_dsrdtr = False
+data_timeout = 1
+
+# Command port (Can be same or diffirent as data port)
+command_port = '/dev/ttyAMA0'
+command_baudrate = 115200
+command_parity = serial.PARITY_ODD
+command_stopbits = serial.STOPBITS_ONE
+command_bytesize = serial.EIGHTBITS
+command_xonxoff = True
+command_rtscts = False
+command_dsrdtr = False
+command_timeout = 0.2
+
+class Modem:
+  data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=data_timeout)
+
+  def enable_caller_id(self):
+    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=command_timeout)
+    command_channel.isOpen()
+    command_channel.write("AT+CLIP=1" + "\r\n")
+    command_channel.close()
+    log.debug("Enabled caller ID")
+
+  def hangup(self):
+    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=command_timeout)
+    command_channel.isOpen()
+    command_channel.write("AT+HVOIC" + "\r\n") # Disconnect only voice call (for example keep possible existing dataconnection online)
+    command_channel.close()
+    log.debug("Hung up")
+
+  def power_on(self):
+    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=command_timeout)
+    command_channel.isOpen()
+    command_channel.write("AT"+"\r\n")
+    command_channel.readline()
+    buffer = command_channel.readline()
+    if not buffer:
+      log.debug("Powering on modem")
+      GPIO.output(modem_power, GPIO.HIGH)
+      while True:
+	line = command_channel.readline().strip()
+        if line == "RDY":
+         log.debug("Modem powered on")
+         break
+      GPIO.output(modem_power, GPIO.LOW)
+      log.debug("Waiting modem to be call ready")
+      while True:
+	line = command_channel.readline().strip()
+        if line == "Call Ready":
+         log.debug("Modem call ready")
+         break
+    else:
+      log.debug("Modem already powered")
+
+  def power_off(self):
+    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=command_timeout)
+    command_channel.isOpen()
+    command_channel.write("AT"+"\r\n")
+    command_channel.readline()
+    buffer = command_channel.readline()
+    if not buffer:
+      log.debug("Modem already powered off")
+    else:
+      log.debug("Powering off modem")
+      GPIO.output(modem_power, GPIO.HIGH)
+      while True:
+	line = command_channel.readline().strip()
+        if line == "NORMAL POWER DOWN":
+         log.debug("Modem powered off")
+         break
+      GPIO.output(modem_power, GPIO.LOW)
+      self.data_channel.close()
+
+  def reset(self):
+    log.debug("Resetting modem")
+    GPIO.output(modem_reset, GPIO.HIGH)
+    time.sleep(0.5)
+    GPIO.output(modem_reset, GPIO.LOW)
+
 class Pin:
   # Init (activate pin)
   def __init__(self):
@@ -103,8 +192,9 @@ class GateKeeper:
   def __init__(self):
     self.pin = Pin()
     self.read_whitelist()
-    self.modem_power_on()    
-    self.enable_caller_id()
+    self.modem = Modem()
+    self.modem.power_on()
+    self.modem.enable_caller_id()
 
   def url_log(self, name, number):
     try:
@@ -133,95 +223,14 @@ class GateKeeper:
     file.close()
     log.debug("Whitelist " + str(self.whitelist))
 
-  def enable_caller_id(self):
-    command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True)
-    command_channel.isOpen()
-    command_channel.write("AT+CLIP=1" + "\r\n")
-    command_channel.close()
-    log.debug("Enabled caller ID")
-
-  def hangup(self):
-    command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True)
-    command_channel.isOpen()
-    command_channel.write("AT+HVOIC" + "\r\n") # Disconnect only voice call (for example keep possible existing dataconnection online)
-    command_channel.close()
-    log.debug("Hung up")
-
-  def start(self):
-    try: 
-      self.wait_for_call()
-    except select.error, v:
-      if v[0] == EINTR:
-        log.debug("Caught EINTR")
-      else:
-        raise
-    else:
-      log.warning("Unexpected exception, shutting down!")
-    finally:
-      log.debug("Stopping GateKeeper")
-      gatekeeper.stop_gatekeeping()
-      log.debug("Shutdown tasks completed")
-      log.info("GateKeeper Stopped")
-      
-  
-  def modem_power_on(self):
-    self.data_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.1)
-    command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.2)
-    command_channel.isOpen()
-    command_channel.write("AT"+"\r\n")
-    command_channel.readline()
-    buffer = command_channel.readline()
-    if not buffer:
-      log.debug("Powering on modem")
-      GPIO.output(modem_power, GPIO.HIGH)
-      while True:
-	line = command_channel.readline().strip()
-        if line == "RDY":
-         log.debug("Modem powered on")
-         break
-      GPIO.output(modem_power, GPIO.LOW)
-      log.debug("Waiting modem to be call ready")
-      while True:
-	line = command_channel.readline().strip()
-        if line == "Call Ready":
-         log.debug("Modem call ready")
-         break
-    else:
-      log.debug("Modem already powered")
-
-  def modem_power_off(self):
-    command_channel = serial.Serial(port='/dev/ttyAMA0',baudrate=115200,parity=serial.PARITY_ODD,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,xonxoff=True,timeout=0.2)
-    command_channel.isOpen()
-    command_channel.write("AT"+"\r\n")
-    command_channel.readline()
-    buffer = command_channel.readline()
-    if not buffer:
-      log.debug("Modem already powered off")
-    else:
-      log.debug("Powering off modem")
-      GPIO.output(modem_power, GPIO.HIGH)
-      while True:
-	line = command_channel.readline().strip()
-        if line == "NORMAL POWER DOWN":
-         log.debug("Modem powered off")
-         break
-      GPIO.output(modem_power, GPIO.LOW)
-      self.data_channel.close()
-
-  def modem_reset(self):
-    log.debug("Reseting modem")
-    GPIO.output(modem_reset, GPIO.HIGH)
-    time.sleep(0.5)
-    GPIO.output(modem_reset, GPIO.LOW)
-
   def wait_for_call(self):
-    self.data_channel.isOpen()
+    self.modem.data_channel.isOpen()
     call_id_pattern = re.compile('^\+CLIP:[^"]+"(\d*?)"')
     creg_pattern = re.compile('.*CREG.*0,[^1]')
     lastTime = time.time()
     while True:
       time.sleep(0.1) # Sleep for a 100 millseconds, no need to consume all CPU
-      buffer = self.data_channel.readline()
+      buffer = self.modem.data_channel.readline()
       call_id_match = call_id_pattern.match(buffer)
 ##
 #      log.debug("Data from data channel: " +buffer.strip())
@@ -232,19 +241,19 @@ class GateKeeper:
 
       if creg_pattern.match(buffer):
         log.debug("Not connected with line \n"+buffer)
-        self.modem_reset()
+        self.modem.reset()
 
       currentTime = time.time()
       diff = currentTime - lastTime
       if diff > 60:
-        self.data_channel.write("AT+CREG?"+"\r\n")
+        self.modem.data_channel.write("AT+CREG?"+"\r\n")
         lastTime = currentTime
 
   def handle_call(self,number):
     log.debug(number)
     if number in self.whitelist:
       # Setup thread names, need to figure out better place and way to do this, but for now This Works™
-      hangup = Thread(target=self.hangup, args=())
+      hangup = Thread(target=self.modem.hangup, args=())
       lock_pulse = Thread(target=self.pin.send_pulse_lock, args=())
       url_log = Thread(target=self.url_log, args=(self.whitelist[number],number))
       # Execute letting people in -tasks
@@ -270,11 +279,27 @@ class GateKeeper:
       dingdong.join()
       url_log.join()
       
+  def start(self):
+    try: 
+      self.wait_for_call()
+    except select.error, v:
+      if v[0] == EINTR:
+        log.debug("Caught EINTR")
+      else:
+        raise
+    else:
+      log.warning("Unexpected exception, shutting down!")
+    finally:
+      log.debug("Stopping GateKeeper")
+      gatekeeper.stop_gatekeeping()
+      log.debug("Shutdown tasks completed")
+      log.info("GateKeeper Stopped")
+      
   def stop_gatekeeping(self):
     # Setup thread names, need to figure out better place and way to do this, but for now This Works™
     closelock = Thread(target=self.pin.lockclose, args=())
     lightsoff = Thread(target=self.pin.lightsoff, args=())
-    modemoff = Thread(target=self.modem_power_off, args=())
+    modemoff = Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     closelock.start()
     lightsoff.start()
