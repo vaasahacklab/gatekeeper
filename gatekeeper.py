@@ -276,14 +276,15 @@ class GateKeeper:
       dingdong.start()
       url_log.start()
       # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
-      self.modem.data_channel.isOpen()
+      data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=1,writeTimeout=1)
+      data_channel.isOpen()
       timestart = time.time()
       timeout = 60 * 2
       while time.time() < timestart + timeout:
-        line = self.modem.data_channel.readline().strip()
+        line = data_channel.readline().strip()
         if line == "NO CARRIER":
-         log.debug("Non whitelist caller hung up")
-         break
+          log.debug("Non whitelist caller hung up")
+          break
       # Wait doorbell and log precess to finish
       dingdong.join()
       url_log.join()
