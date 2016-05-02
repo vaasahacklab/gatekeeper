@@ -278,9 +278,11 @@ class GateKeeper:
       # Wait tasks to finish
       dingdong.join()
       url_log.join()
-      # Wait for hangup, so we log call only once instead on every ring
+      # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
       self.modem.data_channel.isOpen()
-      while True:
+      timestart = time.time()
+      timeout = 60 * 2
+      while time.time() < timestart + timeout:
         line = self.modem.data_channel.readline().strip()
         if line == "NO CARRIER":
          log.debug("Non whitelist caller hung up")
