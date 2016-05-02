@@ -272,12 +272,9 @@ class GateKeeper:
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",number))
-      # Ring the bell and log denied number 
+      # Ring doorbell and log denied number 
       dingdong.start()
       url_log.start()
-      # Wait tasks to finish
-      dingdong.join()
-      url_log.join()
       # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
       self.modem.data_channel.isOpen()
       timestart = time.time()
@@ -287,6 +284,9 @@ class GateKeeper:
         if line == "NO CARRIER":
          log.debug("Non whitelist caller hung up")
          break
+      # Wait doorbell and log precess to finish
+      dingdong.join()
+      url_log.join()
       
   def start(self):
     try: 
