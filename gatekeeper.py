@@ -72,7 +72,7 @@ class Modem:
     command_channel.isOpen()
     command_channel.write("AT+HVOIC" + "\r\n") # Disconnect only voice call (for example keep possible existing dataconnection online)
     command_channel.close()
-    log.debug("Hung up")
+    log.debug("We hung up")
 
   def power_on(self):
     command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=0.2,writeTimeout=1)
@@ -252,7 +252,7 @@ class GateKeeper:
   def handle_call(self,number):
     log.debug(number)
     if number in self.whitelist:
-      # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+      # Setup threads
       hangup = threading.Thread(target=self.modem.hangup, args=())
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.whitelist[number],number))
@@ -269,7 +269,7 @@ class GateKeeper:
       if number == "":
         number = "Hidden"
       log.info("Did not open the gate for "  + number + ", number is not kown.")
-      # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+      # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",number))
       # Ring the bell and log denied number 
@@ -278,6 +278,13 @@ class GateKeeper:
       # Wait tasks to finish
       dingdong.join()
       url_log.join()
+      # Wait for hangup, so we log call only once instead on every ring
+      self.modem.data_channel.isOpen()
+      while True:
+        line = self.modem.data_channel.readline().strip()
+        if line == "NO CARRIER":
+         log.debug("Non whitelist caller hung up")
+         break
       
   def start(self):
     try: 
@@ -296,7 +303,7 @@ class GateKeeper:
       log.info("GateKeeper Stopped")
       
   def stop_gatekeeping(self):
-    # Setup thread names, need to figure out better place and way to do this, but for now This Works™
+    # Setup threads
     closelock = threading.Thread(target=self.pin.lockclose, args=())
     lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
