@@ -59,8 +59,10 @@ command_rtscts = False
 command_dsrdtr = False
 
 # Load configuration file
+log.debug("Loading config file...")
 with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
   config = json.load(f)
+log.debug("Config file loaded.")
 
 class Modem:
   data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
