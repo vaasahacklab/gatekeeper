@@ -59,7 +59,7 @@ command_rtscts = False
 command_dsrdtr = False
 
 # Load configuration file
-with open('config.json', 'r') as f:
+with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
   config = json.load(f)
 
 class Modem:
