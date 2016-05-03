@@ -14,6 +14,7 @@ import traceback         # For stacktrace
 import RPi.GPIO as GPIO  # For using Raspberry Pi GPIO
 import threading         # For enabling multitasking
 import requests          # HTTP library
+import json              # JSON parser, for config file
 
 # Setup logging
 LOG_FILENAME = '/home/ovi/gatekeeper/gatekeeper.log'
@@ -56,6 +57,10 @@ command_bytesize = serial.EIGHTBITS
 command_xonxoff = True
 command_rtscts = False
 command_dsrdtr = False
+
+# Load configuration file
+with open('config.json', 'r') as f:
+  config = json.load(f)
 
 class Modem:
   data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
@@ -194,7 +199,8 @@ class Pin:
       log.debug('Door latch closed')
 
 class GateKeeper:
-  def __init__(self):
+  def __init__(self, config):
+    self.config = config
     self.pin = Pin()
     self.read_whitelist()
     self.modem = Modem()
@@ -206,7 +212,8 @@ class GateKeeper:
     
   def url_log(self, name, number):
     try:
-      r = requests.get('https://mikeful.kapsi.fi/vaasahacklab/log/' + number + '/' + name)
+      data = {'key': config['api_key'], 'phone': number, 'message': name}
+      r = requests.post(config['api_url'], data)
     except:
       log.debug('failed url for remote log')
 
@@ -324,7 +331,7 @@ class GateKeeper:
 
 logging.info("Started GateKeeper")
 
-gatekeeper = GateKeeper()
+gatekeeper = GateKeeper(config)
 
 def shutdown_handler(signum, frame):
   sys.exit(0)
