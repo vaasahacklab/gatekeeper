@@ -17,7 +17,7 @@ import requests          # HTTP library
 import json              # JSON parser, for config file
 
 # Setup logging
-LOG_FILENAME = '/home/ovi/gatekeeper/gatekeeper.log'
+LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
 FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
