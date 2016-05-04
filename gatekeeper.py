@@ -60,9 +60,17 @@ command_dsrdtr = False
 
 # Load configuration file
 log.debug("Loading config file...")
-with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
-  config = json.load(f)
+
+try:
+  with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
+    config = json.load(f)
+except Exception, e:
+  log.debug('Failed loading config file: ' + str(e))
+  raise e
+
 log.debug("Config file loaded.")
+
+# Setup over, start defining classes
 
 class Modem:
   data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
