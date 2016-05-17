@@ -14,6 +14,7 @@ import traceback         # For stacktrace
 import RPi.GPIO as GPIO  # For using Raspberry Pi GPIO
 import threading         # For enabling multitasking
 import requests          # HTTP library
+import MFRC522           # RFID reader
 import json              # JSON parser, for config file
 
 # Setup logging
@@ -22,20 +23,20 @@ FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
 
-# Setup GPIO output pins
-lock = 12
-lights = 16
-modem_power = 17
-modem_reset = 18
-out3 = 20
-out4 = 21
+# Setup GPIO output pins, GPIO.BOARD
+modem_power = 11
+modem_reset = 12
+lock = 32
+lights = 36
+out3 = 38
+out4 = 40
 
-# Setup GPIO input pins
-latch = 5
-lightstatus = 6
-in3 = 13
-in4 = 19
-in5 = 26
+# Setup GPIO input pins, GPIO.BOARD
+latch = 29
+lightstatus = 31
+in3 = 33
+in4 = 35
+in5 = 37
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -71,7 +72,6 @@ except Exception, e:
 log.debug("Config file loaded.")
 
 # Setup over, start defining classes
-
 class Modem:
   data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
 
@@ -148,8 +148,8 @@ class Modem:
 class Pin:
   # Init (activate pin)
   def __init__(self):
-    # Use BCM chip pin numbering convention
-    GPIO.setmode(GPIO.BCM)
+    # Use RPi BOARD pin numbering convention
+    GPIO.setmode(GPIO.BOARD)
 
     # Set up GPIO input channels
     # Light on/off status
@@ -210,9 +210,13 @@ class Pin:
 
 class GateKeeper:
   def __init__(self, config):
+    self.loop = 1
     self.config = config
     self.pin = Pin()
     self.read_whitelist()
+    self.read_rfid_whitelist()
+    wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
+    wait_for_tag.start()
     self.modem = Modem()
     self.modem.power_on()
     self.modem.enable_caller_id()
@@ -235,8 +239,8 @@ class GateKeeper:
 
   def read_whitelist(self):
     self.whitelist = {}
-    file = open('/home/ovi/gatekeeper/whitelist','r')
-    entry_pattern = re.compile('([0-9][0-9]+?) (.*)')
+    file = open(os.path.join(sys.path[0], 'whitelist'),'r')
+    entry_pattern = re.compile('^([0-9][0-9]+?) (.*)')
     line = file.readline()
     while line:
       entry_match = entry_pattern.match(line)
@@ -247,6 +251,21 @@ class GateKeeper:
       line = file.readline()
     file.close()
     log.debug("Whitelist " + str(self.whitelist))
+
+  def read_rfid_whitelist(self):
+    self.rfidwhitelist = {}
+    file = open(os.path.join(sys.path[0], 'rfidwhitelist'),'r')
+    entry_pattern = re.compile('^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) (.*)')
+    line = file.readline()
+    while line:
+      entry_match = entry_pattern.match(line)
+      if entry_match:
+        tag_id = entry_match.group(1)+","+entry_match.group(2)+","+entry_match.group(3)+","+entry_match.group(4)
+        name = entry_match.group(5)
+        self.rfidwhitelist[tag_id] = name
+      line = file.readline()
+    file.close()
+    log.debug("RFID Whitelist " + str(self.rfidwhitelist))
 
   def wait_for_call(self):
     self.modem.data_channel.isOpen()
@@ -266,8 +285,50 @@ class GateKeeper:
         log.debug("Not connected with line \n"+buffer)
         self.modem.reset()
 
+  def wait_for_tag(self):
+    log.debug("Waiting for RFID-tag")
+    MIFAREReader = MFRC522.MFRC522()
+    while self.loop:
+      time.sleep(1)
+      # Scan for cards
+      (status,TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
+      # If a card is found
+      if status == MIFAREReader.MI_OK:
+        log.debug("RFID Card detected")
+        # Get the UID of the card
+        (status,uid) = MIFAREReader.MFRC522_Anticoll()
+        # If we have the UID, continue
+        if status == MIFAREReader.MI_OK:
+          tag_id = str(uid[0])+","+str(uid[1])+","+str(uid[2])+","+str(uid[3])
+          self.handle_rfid(tag_id)
+
+  def handle_rfid(self,tag_id):
+    if tag_id in self.rfidwhitelist:
+      # Setup threads
+      lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
+      url_log = threading.Thread(target=self.url_log, args=(self.rfidwhitelist[tag_id],tag_id))
+      # Execute letting people in -tasks
+      lock_pulse.start()
+      url_log.start()
+      log.info("Opened the gate for RFID tag " + self.rfidwhitelist[tag_id] + " (" + tag_id + ").")
+      # Wait tasks to finish
+      lock_pulse.join()
+      url_log.join()
+    else:
+      log.info("Did not open the gate for RFID tag "  + tag_id + ", tag UID is not kown.")
+      # Setup threads
+      dingdong = threading.Thread(target=self.dingdong, args=())
+      url_log = threading.Thread(target=self.url_log, args=("DENIED",tag_id))
+      # Ring doorbell and log denied RFID tag 
+      dingdong.start()
+      url_log.start()
+#     Wait tasks to finish
+      dingdong.join()
+      url_log.join()
+
+
   def handle_call(self,number):
-    log.debug(number)
+    log.debug("Incoming call from: " + str(number))
     if number in self.whitelist:
       # Setup threads
       hangup = threading.Thread(target=self.modem.hangup, args=())
@@ -309,6 +370,7 @@ class GateKeeper:
   def start(self):
     try: 
       self.wait_for_call()
+      self.wait_for_tag()
     except select.error, v:
       if v[0] == EINTR:
         log.debug("Caught EINTR")
@@ -328,6 +390,7 @@ class GateKeeper:
     lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
+    self.loop = 0
     closelock.start()
     lightsoff.start()
     modemoff.start()
