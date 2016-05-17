@@ -1,0 +1,6 @@
+gatekeeper.log
+whitelist
+rfidwhitelist
+boot
+boot.1
+*.pyc
