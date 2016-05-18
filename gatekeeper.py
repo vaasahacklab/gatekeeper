@@ -250,7 +250,7 @@ class GateKeeper:
   def read_whitelist(self):
     self.whitelist = {}
     file = open(os.path.join(sys.path[0], 'whitelist'),'r')
-    entry_pattern = re.compile('^([0-9][0-9]+?) (.*)')
+    entry_pattern = re.compile('^(\d+) *([^#\n]*)')
     line = file.readline()
     while line:
       entry_match = entry_pattern.match(line)
@@ -265,13 +265,14 @@ class GateKeeper:
   def read_rfid_whitelist(self):
     self.rfidwhitelist = {}
     file = open(os.path.join(sys.path[0], 'rfidwhitelist'),'r')
-    entry_pattern = re.compile('^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) (.*)')
+    entry_pattern = re.compile('^(\d+) *([^#\n]*)')
+#    entry_pattern = re.compile('^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) (.*)')
     line = file.readline()
     while line:
       entry_match = entry_pattern.match(line)
       if entry_match:
-        tag_id = entry_match.group(1)+","+entry_match.group(2)+","+entry_match.group(3)+","+entry_match.group(4)
-        name = entry_match.group(5)
+        tag_id = entry_match.group(1)
+        name = entry_match.group(2)
         self.rfidwhitelist[tag_id] = name
       line = file.readline()
     file.close()
@@ -309,7 +310,7 @@ class GateKeeper:
         (status,uid) = MIFAREReader.MFRC522_Anticoll()
         # If we have the UID, continue
         if status == MIFAREReader.MI_OK:
-          tag_id = str(uid[0])+","+str(uid[1])+","+str(uid[2])+","+str(uid[3])
+          tag_id = str(uid[0])+str(uid[1])+str(uid[2])+str(uid[3])
           self.handle_rfid(tag_id)
     log.debug("Stopped RFID-tag reader")
 
