@@ -73,6 +73,7 @@ log.debug("Config file loaded.")
 
 # Setup over, start defining classes
 class Modem:
+  linestatus_loop = False
   data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
 
   def enable_caller_id(self):
@@ -140,10 +141,16 @@ class Modem:
     log.debug("Modem reset done")
 
   def linestatus(self):
-    while True:
-      self.data_channel.isOpen()
-      self.data_channel.write("AT+CREG?"+"\r\n")
-      time.sleep(60)
+    self.linestatus_loop = True
+    do_it = time.time()			# Set execute loop timing variable to "now"
+    log.debug("Started linestatus check")
+    while self.linestatus_loop:
+      if time.time() > do_it:		# Execute these only if "now" is more than timing variable
+        self.data_channel.isOpen()
+        self.data_channel.write("AT+CREG?"+"\r\n")
+        do_it = time.time() + 60	# Set timing variable 60 seconds from "now"
+      time.sleep(1)
+    log.debug("Stopped linestatus check")
 
 class Pin:
   # Init (activate pin)
@@ -209,20 +216,23 @@ class Pin:
       log.debug('Door latch closed')
 
 class GateKeeper:
+  wait_for_tag = False
+  read_rfid_loop = False
+  linestatus = False
+  
   def __init__(self, config):
-    self.loop = 1
+    self.read_rfid_loop = True
     self.config = config
     self.pin = Pin()
     self.read_whitelist()
     self.read_rfid_whitelist()
-    wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
-    wait_for_tag.start()
+    self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
+    self.wait_for_tag.start()
     self.modem = Modem()
     self.modem.power_on()
     self.modem.enable_caller_id()
-    linestatus = threading.Thread(target=self.modem.linestatus, args=())
-    linestatus.daemon = True
-    linestatus.start()
+    self.linestatus = threading.Thread(target=self.modem.linestatus, args=())
+    self.linestatus.start()
     
   def url_log(self, name, number):
     try:
@@ -286,9 +296,9 @@ class GateKeeper:
         self.modem.reset()
 
   def wait_for_tag(self):
-    log.debug("Waiting for RFID-tag")
+    log.debug("Started RFID-tag reader")
     MIFAREReader = MFRC522.MFRC522()
-    while self.loop:
+    while self.read_rfid_loop:
       time.sleep(1)
       # Scan for cards
       (status,TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
@@ -301,6 +311,7 @@ class GateKeeper:
         if status == MIFAREReader.MI_OK:
           tag_id = str(uid[0])+","+str(uid[1])+","+str(uid[2])+","+str(uid[3])
           self.handle_rfid(tag_id)
+    log.debug("Stopped RFID-tag reader")
 
   def handle_rfid(self,tag_id):
     if tag_id in self.rfidwhitelist:
@@ -325,7 +336,6 @@ class GateKeeper:
 #     Wait tasks to finish
       dingdong.join()
       url_log.join()
-
 
   def handle_call(self,number):
     log.debug("Incoming call from: " + str(number))
@@ -390,17 +400,17 @@ class GateKeeper:
     lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
-    self.loop = 0
-    closelock.start()
-    lightsoff.start()
-    modemoff.start()
-    # Wait tasks to finish
-    closelock.join()
-    lightsoff.join()
-    modemoff.join()
-    # Undo all GPIO setups we have done
-    GPIO.cleanup()
-
+    self.read_rfid_loop = False		# Turns RFID-reading loop state to False
+    closelock.start()			# Close lock
+    lightsoff.start()			# Turn off lights
+    self.modem.linestatus_loop = False	# Ask to stop modem linestatus lookup thread
+    self.linestatus.join()		# Wait linestatus thread to finish
+    modemoff.start()			# Turn modem power off
+    closelock.join()			# Wait close lock to finish
+    lightsoff.join()			# Wait lights off to finish
+    modemoff.join()			# Wait modem off to finish
+    self.wait_for_tag.join()		# Wait RFID tag reading loop to end
+    GPIO.cleanup()			# Undo all GPIO setups we have done
 
 logging.info("Started GateKeeper")
 
