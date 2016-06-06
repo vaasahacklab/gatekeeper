@@ -243,7 +243,8 @@ class GateKeeper:
 
   def dingdong(self):
     try:
-      r = requests.get('http://musicbox.lan:8080')
+      url = config['doorbell_url']
+      r = requests.get(url)
     except:
       log.debug('failed url for doorbell')
 
@@ -266,7 +267,6 @@ class GateKeeper:
     self.rfidwhitelist = {}
     file = open(os.path.join(sys.path[0], 'rfidwhitelist'),'r')
     entry_pattern = re.compile('^(\d+) *([^#\n]*)')
-#    entry_pattern = re.compile('^([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]),([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) (.*)')
     line = file.readline()
     while line:
       entry_match = entry_pattern.match(line)
