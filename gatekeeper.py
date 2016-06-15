@@ -1,21 +1,23 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import serial            # Serial communication
-import re                # Regular expressions
-import logging           # Hmm what could this be for?
-import os                # To call external stuff
-import sys               # System calls
-import signal            # Catch kill signal
-import time              # For the sleep function
-import select            # For select.error
-from errno import EINTR  # Read interrupt
-import traceback         # For stacktrace
-import RPi.GPIO as GPIO  # For using Raspberry Pi GPIO
-import threading         # For enabling multitasking
-import requests          # HTTP library
-import MFRC522           # RFID reader
-import json              # JSON parser, for config file
+import serial               # Serial communication
+import re                   # Regular expressions
+import logging              # Hmm what could this be for?
+import os                   # To call external stuff
+import sys                  # System calls
+import signal               # Catch kill signal
+import time                 # For the sleep function
+import select               # For select.error
+from errno import EINTR     # Read interrupt
+import traceback            # For stacktrace
+import RPi.GPIO as GPIO     # For using Raspberry Pi GPIO
+import threading            # For enabling multitasking
+import requests             # HTTP library
+import MFRC522              # RFID reader
+import json                 # JSON parser, for config file
+from shutil import copyfile # File copying
+import paramiko             # SSH access library
 
 # Setup logging
 LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
@@ -65,7 +67,7 @@ log.debug("Loading config file...")
 try:
   with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
     config = json.load(f)
-except Exception, e:
+except Exception as e:
   log.debug('Failed loading config file: ' + str(e))
   raise e
 
@@ -100,14 +102,14 @@ class Modem:
       log.debug("Powering on modem")
       GPIO.output(modem_power, GPIO.HIGH)
       while True:
-	line = command_channel.readline().strip()
+        line = command_channel.readline().strip()
         if line == "RDY":
          log.debug("Modem powered on")
          break
       GPIO.output(modem_power, GPIO.LOW)
       log.debug("Waiting modem to be call ready")
       while True:
-	line = command_channel.readline().strip()
+        line = command_channel.readline().strip()
         if line == "Call Ready":
          log.debug("Modem call ready")
          break
@@ -126,10 +128,10 @@ class Modem:
       log.debug("Powering off modem")
       GPIO.output(modem_power, GPIO.HIGH)
       while True:
-	line = command_channel.readline().strip()
+        line = command_channel.readline().strip()
         if line == "NORMAL POWER DOWN":
-         log.debug("Modem powered off")
-         break
+          log.debug("Modem powered off")
+          break
       GPIO.output(modem_power, GPIO.LOW)
       self.data_channel.close()
 
@@ -185,7 +187,7 @@ class Pin:
     # Currently unused outputs on output-relay board, initialize them anyway
     GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
     GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
-  
+
   def lockopen(self):
     GPIO.output(lock, GPIO.LOW)
     log.debug("Opened lock")
@@ -219,13 +221,18 @@ class GateKeeper:
   wait_for_tag = False
   read_rfid_loop = False
   linestatus = False
-  
+  read_whitelist_loop = False
+
   def __init__(self, config):
+    self.rfidwhitelist = {}
+    self.whitelist = {}
     self.read_rfid_loop = True
+    self.read_whitelist_loop = True
     self.config = config
     self.pin = Pin()
     self.read_whitelist()
-    self.read_rfid_whitelist()
+    self.read_whitelist_interval = threading.Thread(target=self.read_whitelist_interval, args=())
+    self.read_whitelist_interval.start()
     self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
     self.wait_for_tag.start()
     self.modem = Modem()
@@ -233,7 +240,7 @@ class GateKeeper:
     self.modem.enable_caller_id()
     self.linestatus = threading.Thread(target=self.modem.linestatus, args=())
     self.linestatus.start()
-    
+
   def url_log(self, name, number):
     try:
       data = {'key': config['api_key'], 'phone': number, 'message': name}
@@ -248,34 +255,50 @@ class GateKeeper:
     except:
       log.debug('failed url for doorbell')
 
-  def read_whitelist(self):
-    self.whitelist = {}
-    file = open(os.path.join(sys.path[0], 'whitelist'),'r')
-    entry_pattern = re.compile('^(\d+) *([^#\n]*)')
-    line = file.readline()
-    while line:
-      entry_match = entry_pattern.match(line)
-      if entry_match:
-        number = entry_match.group(1)
-        name = entry_match.group(2)
-        self.whitelist[number] = name
-      line = file.readline()
-    file.close()
-    log.debug("Whitelist " + str(self.whitelist))
+  def read_whitelist_interval(self):
+    log.debug('Started whitelist interval refreshing loop')
+    timestart = time.time()
+    while self.read_whitelist_loop: # Loop until told otherwise
+      timeout = 3600 # Execute hourly
+      if time.time() > timestart + timeout:
+        timestart = time.time()
+        self.read_whitelist()
+      time.sleep(1) # Let loop sleep for 1 second until next iteration
+    log.debug('Stopped whitelist interval refreshing loop')
 
-  def read_rfid_whitelist(self):
-    self.rfidwhitelist = {}
-    file = open(os.path.join(sys.path[0], 'rfidwhitelist'),'r')
-    entry_pattern = re.compile('^(\d+) *([^#\n]*)')
-    line = file.readline()
-    while line:
-      entry_match = entry_pattern.match(line)
-      if entry_match:
-        tag_id = entry_match.group(1)
-        name = entry_match.group(2)
-        self.rfidwhitelist[tag_id] = name
-      line = file.readline()
-    file.close()
+
+  def read_whitelist(self):
+    ssh = paramiko.SSHClient()
+    ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
+    whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
+
+    try:
+      self.whitelist.clear()
+      self.rfidwhitelist.clear()
+      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'], key_filename=config['whitelist_ssh_keyfile'])
+      sftp = ssh.open_sftp()
+      sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
+      sftp.close()
+      ssh.close()
+      with open(whitelistFileName) as data_file:
+        jsonList = json.load(data_file)
+      copyfile(whitelistFileName, whitelistFileName+".local")
+    except Exception as e:
+      log.debug("Failed to load whitelist from server, error:\n" + str(e) + "\nLoading latest local whitelist copy")
+      with open(whitelistFileName + ".local") as data_file:
+        jsonList = json.load(data_file)
+
+    for key, value in jsonList.items():
+      if "PhoneNumber" in value:
+        for phoneNumber in value["PhoneNumber"]:
+          phoneNumber = "0"+phoneNumber[4:]
+          self.whitelist[phoneNumber] = value["nick"]
+
+      if "RFID" in value:
+        for rfidTag in value["RFID"]:
+          self.rfidwhitelist[rfidTag] = value["nick"]
+
+    log.debug("Whitelist " + str(self.whitelist))
     log.debug("RFID Whitelist " + str(self.rfidwhitelist))
 
   def wait_for_call(self):
@@ -331,7 +354,7 @@ class GateKeeper:
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",tag_id))
-      # Ring doorbell and log denied RFID tag 
+      # Ring doorbell and log denied RFID tag
       dingdong.start()
       url_log.start()
 #     Wait tasks to finish
@@ -361,7 +384,7 @@ class GateKeeper:
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",number))
-      # Ring doorbell and log denied number 
+      # Ring doorbell and log denied number
       dingdong.start()
       url_log.start()
       # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
@@ -377,12 +400,12 @@ class GateKeeper:
       # Wait doorbell and log precess to finish
       dingdong.join()
       url_log.join()
-      
+
   def start(self):
-    try: 
+    try:
       self.wait_for_call()
       self.wait_for_tag()
-    except select.error, v:
+    except select.error as v:
       if v[0] == EINTR:
         log.debug("Caught EINTR")
       else:
@@ -394,7 +417,7 @@ class GateKeeper:
       gatekeeper.stop_gatekeeping()
       log.debug("Shutdown tasks completed")
       log.info("GateKeeper Stopped")
-      
+
   def stop_gatekeeping(self):
     # Setup threads
     closelock = threading.Thread(target=self.pin.lockclose, args=())
@@ -402,6 +425,7 @@ class GateKeeper:
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     self.read_rfid_loop = False		# Turns RFID-reading loop state to False
+    self.read_whitelist_loop = False    # Turns whitelist loader/parser loop to False
     closelock.start()			# Close lock
     lightsoff.start()			# Turn off lights
     self.modem.linestatus_loop = False	# Ask to stop modem linestatus lookup thread
@@ -411,6 +435,7 @@ class GateKeeper:
     lightsoff.join()			# Wait lights off to finish
     modemoff.join()			# Wait modem off to finish
     self.wait_for_tag.join()		# Wait RFID tag reading loop to end
+    self.read_whitelist_interval.join() # Wait RFID tag reading loop to end
     GPIO.cleanup()			# Undo all GPIO setups we have done
 
 logging.info("Started GateKeeper")
