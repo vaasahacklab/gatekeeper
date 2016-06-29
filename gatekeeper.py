@@ -291,7 +291,10 @@ class GateKeeper:
     for key, value in jsonList.items():
       if "PhoneNumber" in value:
         for phoneNumber in value["PhoneNumber"]:
-          phoneNumber = "0"+phoneNumber[4:]
+          if phoneNumber[:4] == "+358":       # If phonenumber is finnish
+            phoneNumber = "0"+phoneNumber[4:] # Replace '+358' with an '0'
+          else:                               # Else number is international
+            phoneNumber = phoneNumber[1:]     # Only remove the '+'
           self.whitelist[phoneNumber] = value["nick"]
 
       if "RFID" in value:
@@ -424,18 +427,18 @@ class GateKeeper:
     lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
-    self.read_rfid_loop = False		# Turns RFID-reading loop state to False
-    self.read_whitelist_loop = False    # Turns whitelist loader/parser loop to False
+    self.read_rfid_loop = False		# Tells RFID-reading loop to stop
+    self.read_whitelist_loop = False    # Tells whitelist loader loop to stop
     closelock.start()			# Close lock
     lightsoff.start()			# Turn off lights
-    self.modem.linestatus_loop = False	# Ask to stop modem linestatus lookup thread
+    self.modem.linestatus_loop = False	# Tells modem linestatus check loop to stop
     self.linestatus.join()		# Wait linestatus thread to finish
-    modemoff.start()			# Turn modem power off
+    modemoff.start()			# Tell modem to power off
     closelock.join()			# Wait close lock to finish
     lightsoff.join()			# Wait lights off to finish
     modemoff.join()			# Wait modem off to finish
     self.wait_for_tag.join()		# Wait RFID tag reading loop to end
-    self.read_whitelist_interval.join() # Wait RFID tag reading loop to end
+    self.read_whitelist_interval.join() # Wait whitelist loader loop to end
     GPIO.cleanup()			# Undo all GPIO setups we have done
 
 logging.info("Started GateKeeper")
