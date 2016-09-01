@@ -325,6 +325,9 @@ class GateKeeper:
   def wait_for_tag(self):
     log.debug("Started RFID-tag reader")
     MIFAREReader = MFRC522.MFRC522()
+    # Set RFID-antenna gain to maximum, 48dB, register value of 0x07
+    MIFAREReader.ClearBitMask(MIFAREReader.RFCfgReg, (0x07<<4))
+    MIFAREReader.SetBitMask(MIFAREReader.RFCfgReg, (0x07<<4))
     while self.read_rfid_loop:
       time.sleep(1)
       # Scan for cards
