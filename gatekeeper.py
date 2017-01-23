@@ -273,8 +273,6 @@ class GateKeeper:
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
 
     try:
-      self.whitelist.clear()
-      self.rfidwhitelist.clear()
       ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'], key_filename=config['whitelist_ssh_keyfile'])
       sftp = ssh.open_sftp()
       sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
@@ -287,6 +285,11 @@ class GateKeeper:
       log.debug("Failed to load whitelist from server, error:\n" + str(e) + "\nLoading latest local whitelist copy")
       with open(whitelistFileName + ".local") as data_file:
         jsonList = json.load(data_file)
+
+    self.whitelist.clear()
+    log.debug("Cleared old phonenumber whitelist from RAM")
+    self.rfidwhitelist.clear()
+    log.debug("Cleared old RFID-number whitelist from RAM")
 
     for key, value in jsonList.items():
       if "PhoneNumber" in value:
@@ -314,6 +317,7 @@ class GateKeeper:
 ##
 #      log.debug("Data from data channel: " +buffer.strip())
 ##
+
       if call_id_match:
         number = call_id_match.group(1)
         self.handle_call(number)
