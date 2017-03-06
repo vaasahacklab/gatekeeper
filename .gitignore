@@ -1,6 +1,7 @@
+config.json
 gatekeeper.log
-whitelist
-rfidwhitelist
+whitelist.json.local
+whitelist.json
 boot
 boot.1
 *.pyc
