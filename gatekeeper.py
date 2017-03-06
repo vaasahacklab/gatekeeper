@@ -253,9 +253,9 @@ class GateKeeper:
 
   def url_log(self, name, number):
     try:
+      publish.single("door/name", name, hostname=MQTThost)
       data = {'key': config['api_key'], 'phone': number, 'message': name}
       r = requests.post(config['api_url'], data)
-      public.single("door/name", name, hostname=MQTThost)
     except:
       log.debug('failed url for remote log')
 
@@ -386,6 +386,9 @@ class GateKeeper:
     log.debug("Incoming call from: " + str(number))
     if number in self.whitelist:
       # Setup threads
+
+      #publish.single("door/name", number, hostname=MQTThost)
+
       hangup = threading.Thread(target=self.modem.hangup, args=())
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.whitelist[number],number))
@@ -426,6 +429,8 @@ class GateKeeper:
     try:
       self.wait_for_call()
       self.wait_for_tag()
+    except Exception as e:
+      log.debug("error:\n" + str(e))
     except select.error as v:
       if v[0] == EINTR:
         log.debug("Caught EINTR")
