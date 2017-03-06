@@ -244,16 +244,23 @@ class GateKeeper:
 
   def url_log(self, name, number):
     try:
-      publish.single("door/name", name, hostname=config['MQTThost'])
       data = {'key': config['api_key'], 'phone': number, 'message': name}
       r = requests.post(config['api_url'], data)
     except:
       log.debug('failed url for remote log')
 
+  def mqtt_log(self, name, number):
+    try:
+      publish.single("door/name", name, hostname=config['MQTThost'])
+      log.debug('success: MQTT remote log')
+    except:
+      log.debug('failed MQTT remote log operation')
+
   def dingdong(self):
     try:
       url = config['doorbell_url']
       r = requests.get(url)
+      log.debug('success: url for doorbell')
     except:
       log.debug('failed url for doorbell')
 
@@ -267,7 +274,6 @@ class GateKeeper:
         self.read_whitelist()
       time.sleep(1) # Let loop sleep for 1 second until next iteration
     log.debug('Stopped whitelist interval refreshing loop')
-
 
   def read_whitelist(self):
     ssh = paramiko.SSHClient()
@@ -354,44 +360,50 @@ class GateKeeper:
       # Setup threads
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.rfidwhitelist[tag_id],tag_id))
+      mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.rfidwhitelist[tag_id],tag_id))
       # Execute letting people in -tasks
       lock_pulse.start()
       url_log.start()
+      mqtt_log.start()
       log.info("Opened the gate for RFID tag " + self.rfidwhitelist[tag_id] + " (" + tag_id + ").")
       # Wait tasks to finish
       lock_pulse.join()
       url_log.join()
+      mqtt_log.join()
     else:
       log.info("Did not open the gate for RFID tag "  + tag_id + ", tag UID is not kown.")
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",tag_id))
+      mqtt_log = threading.Thread(target=self.mqtt_log, args=("DENIED",tag_id))
       # Ring doorbell and log denied RFID tag
       dingdong.start()
       url_log.start()
+      mqtt_log.start()
       # Wait tasks to finish
       dingdong.join()
       url_log.join()
+      mqtt_log.join()
 
   def handle_call(self,number):
     log.debug("Incoming call from: " + str(number))
     if number in self.whitelist:
       # Setup threads
-
-      #publish.single("door/name", number, hostname=MQTThost)
-
       hangup = threading.Thread(target=self.modem.hangup, args=())
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.whitelist[number],number))
+      mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.whitelist[number],number))
       # Execute letting people in -tasks
       hangup.start()
       lock_pulse.start()
       url_log.start()
+      mqtt_log.start()
       log.info("Opened the gate for " + self.whitelist[number] + " (" + number + ").")
       # Wait tasks to finish
       hangup.join()
       lock_pulse.join()
       url_log.join()
+      mqtt_log.join()
     else:
       if number == "":
         number = "Hidden"
@@ -399,9 +411,11 @@ class GateKeeper:
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",number))
+      mqtt_log = threading.Thread(target=self.mqtt_log, args=("DENIED",number))
       # Ring doorbell and log denied number
       dingdong.start()
       url_log.start()
+      mqtt_log.start()
       # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
       data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=1,writeTimeout=1)
       data_channel.isOpen()
@@ -415,6 +429,7 @@ class GateKeeper:
       # Wait doorbell and log precess to finish
       dingdong.join()
       url_log.join()
+      mqtt_log.join()
 
   def start(self):
     try:
