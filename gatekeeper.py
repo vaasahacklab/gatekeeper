@@ -18,15 +18,13 @@ import MFRC522              # RFID reader
 import json                 # JSON parser, for config file
 from shutil import copyfile # File copying
 import paramiko             # SSH access library
+import paho.mqtt.publish as publish # MQTT door name logging
 
 # Setup logging
 LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
 FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
-
-import paho.mqtt.publish as publish # MQTT door name logging
-
 
 #
 MQTThost = "tunkki9"
