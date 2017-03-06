@@ -7,6 +7,7 @@
 	"whitelist_ssh_username": "",
 	"whitelist_ssh_password": "",
 	"whitelist_ssh_keyfile": "",
-	"whitelist_ssh_getfile": ""
+	"whitelist_ssh_getfile": "",
+	"MQTThost": ""
 }
 

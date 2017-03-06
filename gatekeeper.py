@@ -26,14 +26,17 @@ FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
 
-#
-MQTThost = "tunkki9"
+# Load configuration file
+log.debug("Loading config file...")
 
-# Setup logging
-LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
-FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
-logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
-log = logging.getLogger("GateKeeper")
+try:
+  with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
+    config = json.load(f)
+except Exception as e:
+  log.debug('Failed loading config file: ' + str(e))
+  raise e
+
+log.debug("Config file loaded.")
 
 # Setup GPIO output pins, GPIO.BOARD
 modem_power = 11
@@ -70,18 +73,6 @@ command_bytesize = serial.EIGHTBITS
 command_xonxoff = True
 command_rtscts = False
 command_dsrdtr = False
-
-# Load configuration file
-log.debug("Loading config file...")
-
-try:
-  with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
-    config = json.load(f)
-except Exception as e:
-  log.debug('Failed loading config file: ' + str(e))
-  raise e
-
-log.debug("Config file loaded.")
 
 # Setup over, start defining classes
 class Modem:
@@ -253,7 +244,7 @@ class GateKeeper:
 
   def url_log(self, name, number):
     try:
-      publish.single("door/name", name, hostname=MQTThost)
+      publish.single("door/name", name, hostname=config['MQTThost'])
       data = {'key': config['api_key'], 'phone': number, 'message': name}
       r = requests.post(config['api_url'], data)
     except:
@@ -378,7 +369,7 @@ class GateKeeper:
       # Ring doorbell and log denied RFID tag
       dingdong.start()
       url_log.start()
-#     Wait tasks to finish
+      # Wait tasks to finish
       dingdong.join()
       url_log.join()
 
@@ -450,19 +441,19 @@ class GateKeeper:
     lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
-    self.read_rfid_loop = False		# Tells RFID-reading loop to stop
+    self.read_rfid_loop = False         # Tells RFID-reading loop to stop
     self.read_whitelist_loop = False    # Tells whitelist loader loop to stop
-    closelock.start()			# Close lock
-    lightsoff.start()			# Turn off lights
-    self.modem.linestatus_loop = False	# Tells modem linestatus check loop to stop
-    self.linestatus.join()		# Wait linestatus thread to finish
-    modemoff.start()			# Tell modem to power off
-    closelock.join()			# Wait close lock to finish
-    lightsoff.join()			# Wait lights off to finish
-    modemoff.join()			# Wait modem off to finish
-    self.wait_for_tag.join()		# Wait RFID tag reading loop to end
+    closelock.start()                   # Close lock
+    lightsoff.start()                   # Turn off lights
+    self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
+    self.linestatus.join()              # Wait linestatus thread to finish
+    modemoff.start()                    # Tell modem to power off
+    closelock.join()                    # Wait close lock to finish
+    lightsoff.join()                    # Wait lights off to finish
+    modemoff.join()                     # Wait modem off to finish
+    self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.read_whitelist_interval.join() # Wait whitelist loader loop to end
-    GPIO.cleanup()			# Undo all GPIO setups we have done
+    GPIO.cleanup()                      # Undo all GPIO setups we have done
 
 logging.info("Started GateKeeper")
 
