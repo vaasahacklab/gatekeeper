@@ -18,6 +18,11 @@ import MFRC522              # RFID reader
 import json                 # JSON parser, for config file
 from shutil import copyfile # File copying
 import paramiko             # SSH access library
+import paho.mqtt.publish as publish # MQTT door name logging
+
+
+#
+MQTThost = "tunkki9"
 
 # Setup logging
 LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
@@ -245,6 +250,7 @@ class GateKeeper:
     try:
       data = {'key': config['api_key'], 'phone': number, 'message': name}
       r = requests.post(config['api_url'], data)
+      public.single("door/name", name, hostname=MQTThost)
     except:
       log.debug('failed url for remote log')
 
