@@ -1,0 +1,12 @@
+{
+	"api_key": "",
+	"api_url": "",
+	"doorbell_url": "",
+	"whitelist_ssh_server": "",
+	"whitelist_ssh_port": 22,
+	"whitelist_ssh_username": "",
+	"whitelist_ssh_password": "",
+	"whitelist_ssh_keyfile": "",
+	"whitelist_ssh_getfile": ""
+}
+

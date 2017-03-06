@@ -25,6 +25,18 @@ FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
 
+import paho.mqtt.publish as publish # MQTT door name logging
+
+
+#
+MQTThost = "tunkki9"
+
+# Setup logging
+LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
+FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
+logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
+log = logging.getLogger("GateKeeper")
+
 # Setup GPIO output pins, GPIO.BOARD
 modem_power = 11
 modem_reset = 12
@@ -245,6 +257,7 @@ class GateKeeper:
     try:
       data = {'key': config['api_key'], 'phone': number, 'message': name}
       r = requests.post(config['api_url'], data)
+      public.single("door/name", name, hostname=MQTThost)
     except:
       log.debug('failed url for remote log')
 
