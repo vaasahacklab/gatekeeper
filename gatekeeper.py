@@ -145,13 +145,13 @@ class Modem:
 
   def linestatus(self):
     self.linestatus_loop = True
-    do_it = time.time()			# Set execute loop timing variable to "now"
+    do_it = time.time()     # Set execute loop timing variable to "now"
     log.debug("Started linestatus check")
     while self.linestatus_loop:
-      if time.time() > do_it:		# Execute these only if "now" is more than timing variable
+      if time.time() > do_it:   # Execute these only if "now" is more than timing variable
         self.data_channel.isOpen()
         self.data_channel.write("AT+CREG?"+"\r\n")
-        do_it = time.time() + 60	# Set timing variable 60 seconds from "now"
+        do_it = time.time() + 60  # Set timing variable 60 seconds from "now"
       time.sleep(1)
     log.debug("Stopped linestatus check")
 
@@ -281,7 +281,7 @@ class GateKeeper:
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
 
     try:
-      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'], key_filename=config['whitelist_ssh_keyfile'])
+      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'].encode("ascii"), key_filename=config['whitelist_ssh_keyfile'])
       sftp = ssh.open_sftp()
       sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
       sftp.close()
