@@ -19,6 +19,7 @@ import json                 # JSON parser, for config file
 from shutil import copyfile # File copying
 import paramiko             # SSH access library
 import paho.mqtt.publish as publish # MQTT door name logging
+from pprint import pformat  # Pretty Print formatting
 
 # Setup logging
 LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
@@ -312,8 +313,8 @@ class GateKeeper:
         for rfidTag in value["RFID"]:
           self.rfidwhitelist[rfidTag] = value["nick"]
 
-    log.debug("Whitelist " + str(self.whitelist))
-    log.debug("RFID Whitelist " + str(self.rfidwhitelist))
+    log.debug("Whitelist\n" + pformat(self.whitelist))
+    log.debug("RFID Whitelist\n " + pformat(self.rfidwhitelist))
 
   def wait_for_call(self):
     self.modem.data_channel.isOpen()
