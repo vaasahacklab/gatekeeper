@@ -2,8 +2,8 @@ config.json
 gatekeeper.log
 whitelist.json.local
 whitelist.json
-whitelist
-rfidwhitelist
 boot
 boot.1
 *.pyc
+venv/
+SPI-Py/
