@@ -277,12 +277,22 @@ class GateKeeper:
     log.debug('Stopped whitelist interval refreshing loop')
 
   def read_whitelist(self):
+  	# Use best available cryptographic settings
+    paramiko.Transport._preferred_ciphers = ('aes256-ctr', 'aes192-ctr', 'aes128-ctr')
+    paramiko.Transport._preferred_macs = ('hmac-sha2-512', 'hmac-sha2-256')
+    paramiko.Transport._preferred_key_types = ('ssh-ed25519', 'ssh-rsa')
+  # For some reason next line errors with incompatible kex, while not setting it makes it work with very same kex algo, see https://github.com/paramiko/paramiko/issues/1120
+  # paramiko.Transport._preferred_kex = ('diffie-hellman-group-exchange-sha256')
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
 
     try:
-      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'].encode("ascii"), key_filename=os.path.expanduser(config['whitelist_ssh_keyfile']))
+      ssh.connect(hostname=config['whitelist_ssh_server'],
+                  port=config['whitelist_ssh_port'],
+                  username=config['whitelist_ssh_username'],
+                  password=config['whitelist_ssh_password'].encode("ascii"),
+                  key_filename=os.path.expanduser(config['whitelist_ssh_keyfile']))
       sftp = ssh.open_sftp()
       sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
       sftp.close()
