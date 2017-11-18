@@ -1,0 +1,14 @@
+[Unit]
+Description=Gatekeeper
+After=network.target
+
+[Service]
+Type=simple
+User=gatekeeper
+Group=gatekeeper
+WorkingDirectory=/home/gatekeeper/gatekeeper
+ExecStart=/home/gatekeeper/gatekeeper/venv/bin/python gatekeeper.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

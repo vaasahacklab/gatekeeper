@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
 import serial               # Serial communication
@@ -22,7 +22,7 @@ import paho.mqtt.publish as publish # MQTT door name logging
 from pprint import pformat  # Pretty Print formatting
 
 # Setup logging
-LOG_FILENAME = os.path.join(sys.path[0], 'gatekeeper.log')
+LOG_FILENAME = '/var/log/gatekeeper.log'
 FORMAT = "%(asctime)-12s: %(levelname)-8s - %(message)s"
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,format=FORMAT)
 log = logging.getLogger("GateKeeper")
@@ -282,7 +282,7 @@ class GateKeeper:
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
 
     try:
-      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'].encode("ascii"), key_filename=config['whitelist_ssh_keyfile'])
+      ssh.connect(hostname=config['whitelist_ssh_server'], port=config['whitelist_ssh_port'], username=config['whitelist_ssh_username'], password=config['whitelist_ssh_password'].encode("ascii"), key_filename=os.path.expanduser(config['whitelist_ssh_keyfile']))
       sftp = ssh.open_sftp()
       sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
       sftp.close()
