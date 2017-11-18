@@ -278,11 +278,11 @@ class GateKeeper:
 
   def read_whitelist(self):
   	# Use best available cryptographic settings
+  	# TODO: use Paramiko Transport directly instead SSHClient
     paramiko.Transport._preferred_ciphers = ('aes256-ctr', 'aes192-ctr', 'aes128-ctr')
     paramiko.Transport._preferred_macs = ('hmac-sha2-512', 'hmac-sha2-256')
     paramiko.Transport._preferred_key_types = ('ssh-ed25519', 'ssh-rsa')
-  # For some reason next line errors with incompatible kex, while not setting it makes it work with very same kex algo, see https://github.com/paramiko/paramiko/issues/1120
-  # paramiko.Transport._preferred_kex = ('diffie-hellman-group-exchange-sha256')
+    paramiko.Transport._preferred_kex = ('diffie-hellman-group-exchange-sha256', )
     ssh = paramiko.SSHClient()
     ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
