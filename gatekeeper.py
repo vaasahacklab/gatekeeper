@@ -220,28 +220,29 @@ class Pin:
       log.debug('Door latch closed')
 
 class GateKeeper:
+  # Introduce program-loop parameters, initially disabled
   wait_for_tag = False
   read_rfid_loop = False
   linestatus = False
   read_whitelist_loop = False
 
   def __init__(self, config):
-    self.rfidwhitelist = {}
+    self.rfidwhitelist = {}         # Introduce whitelist parameters
     self.whitelist = {}
-    self.read_rfid_loop = True
-    self.read_whitelist_loop = True
+    self.read_rfid_loop = True      # Enable reading RFID
+    self.read_whitelist_loop = True # Enable refreshing whitelist perioidically
     self.config = config
-    self.pin = Pin()
-    self.read_whitelist()
+    self.pin = Pin()                # GPIO pins
+    self.read_whitelist()           # Read whitelist on startup
     self.read_whitelist_interval = threading.Thread(target=self.read_whitelist_interval, args=())
-    self.read_whitelist_interval.start()
+    self.read_whitelist_interval.start() # Read whitelist perioidically
     self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
-    self.wait_for_tag.start()
+    self.wait_for_tag.start()       # Start RFID-tag reader routine
     self.modem = Modem()
     self.modem.power_on()
     self.modem.enable_caller_id()
     self.linestatus = threading.Thread(target=self.modem.linestatus, args=())
-    self.linestatus.start()
+    self.linestatus.start()         # Check we are still registered on cellular network
 
   def url_log(self, name, number):
     try:
@@ -277,31 +278,30 @@ class GateKeeper:
     log.debug('Stopped whitelist interval refreshing loop')
 
   def read_whitelist(self):
-  	# Use best available cryptographic settings
-  	# TODO: use Paramiko Transport directly instead SSHClient
-    paramiko.Transport._preferred_ciphers = ('aes256-ctr', 'aes192-ctr', 'aes128-ctr')
-    paramiko.Transport._preferred_macs = ('hmac-sha2-512', 'hmac-sha2-256')
-    paramiko.Transport._preferred_key_types = ('ssh-ed25519', 'ssh-rsa')
-    paramiko.Transport._preferred_kex = ('diffie-hellman-group-exchange-sha256', )
-    ssh = paramiko.SSHClient()
-    ssh.load_host_keys(os.path.expanduser(os.path.join("~", ".ssh", "known_hosts")))
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
+    log.debug("Loading SSH-key from " + os.path.expanduser(config['whitelist_ssh_keyfile']))
+    key = paramiko.Ed25519Key.from_private_key_file(os.path.expanduser(config['whitelist_ssh_keyfile']), password=config['whitelist_ssh_password'].encode("ascii"))
+    transport = paramiko.Transport((config['whitelist_ssh_server'], config['whitelist_ssh_port']))
 
     try:
-      ssh.connect(hostname=config['whitelist_ssh_server'],
-                  port=config['whitelist_ssh_port'],
-                  username=config['whitelist_ssh_username'],
-                  password=config['whitelist_ssh_password'].encode("ascii"),
-                  key_filename=os.path.expanduser(config['whitelist_ssh_keyfile']))
-      sftp = ssh.open_sftp()
+      # Set allowed SSH/SFTP parameters, we (try to) only allow secure ones, tuple format
+      transport.get_security_options().ciphers = ('aes256-ctr', 'aes192-ctr', 'aes128-ctr')
+      transport.get_security_options().kex = ('diffie-hellman-group-exchange-sha256',)
+      transport.get_security_options().digests = ('hmac-sha2-512', 'hmac-sha2-256')
+      transport.get_security_options().key_types = ('ssh-ed25519', 'ssh-rsa')
+
+      log.info("Retrieving whitelist from " + config['whitelist_ssh_server'])
+      transport.connect(username=config['whitelist_ssh_username'], pkey=key)
+      sftp = paramiko.SFTPClient.from_transport(transport)
       sftp.get(config['whitelist_ssh_getfile'], whitelistFileName)
-      sftp.close()
-      ssh.close()
+      log.debug("Whitelist retrieved")
+      transport.close()
+      log.debug("SFTP-connection closed")
       with open(whitelistFileName) as data_file:
         jsonList = json.load(data_file)
       copyfile(whitelistFileName, whitelistFileName+".local")
     except Exception as e:
-      log.debug("Failed to load whitelist from server, error:\n" + str(e) + "\nLoading latest local whitelist copy")
+      log.error("Failed to load whitelist from " + config['whitelist_ssh_server']  + ", error:\n" + str(e) + "\nLoading latest local whitelist copy")
       with open(whitelistFileName + ".local") as data_file:
         jsonList = json.load(data_file)
 
