@@ -224,18 +224,18 @@ class GateKeeper:
   wait_for_tag = False
   read_rfid_loop = False
   linestatus = False
-  read_whitelist_loop = False
+  load_whitelist_loop = False
 
   def __init__(self, config):
     self.rfidwhitelist = {}         # Introduce whitelist parameters
     self.whitelist = {}
     self.read_rfid_loop = True      # Enable reading RFID
-    self.read_whitelist_loop = True # Enable refreshing whitelist perioidically
+    self.load_whitelist_loop = True # Enable refreshing whitelist perioidically
     self.config = config
     self.pin = Pin()                # GPIO pins
     self.read_whitelist()           # Read whitelist on startup
-    self.read_whitelist_interval = threading.Thread(target=self.read_whitelist_interval, args=())
-    self.read_whitelist_interval.start() # Read whitelist perioidically
+    self.load_whitelist_interval = threading.Thread(target=self.load_whitelist_interval, args=())
+    self.load_whitelist_interval.start() # Update whitelist perioidically
     self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
     self.wait_for_tag.start()       # Start RFID-tag reader routine
     self.modem = Modem()
@@ -266,23 +266,61 @@ class GateKeeper:
     except:
       log.debug('failed url for doorbell')
 
-  def read_whitelist_interval(self):
+  def load_whitelist_interval(self):
     log.debug('Started whitelist interval refreshing loop')
     timestart = time.time()
-    while self.read_whitelist_loop: # Loop until told otherwise
-      timeout = 3600 # Execute hourly
+    while self.load_whitelist_loop: # Loop until told otherwise
+      timeout = 60 * 60 # Execute hourly
       if time.time() > timestart + timeout:
+        log.debug('Running whitelist interval refresh')
         timestart = time.time()
-        self.read_whitelist()
+        try:
+          self.load_whitelist()
+        except Exception as e:
+          log.error("Failed to load whitelist from " + config['whitelist_ssh_server'] + ", error:\n" + str(e) + "\nNot updating whitelist")
+        else:
+          self.read_whitelist()
       time.sleep(1) # Let loop sleep for 1 second until next iteration
     log.debug('Stopped whitelist interval refreshing loop')
 
   def read_whitelist(self):
+    try:
+      whitelistFileName = os.path.join(sys.path[0], 'whitelist.json.local')
+      if not os.path.isfile(whitelistFileName):
+        log.info(whitelistFileName + " doesn't exits (first time use?), trying to load one from " + config['whitelist_ssh_server'])
+        self.load_whitelist()
+      with open(whitelistFileName) as data_file:
+        jsonList = json.load(data_file)
+        self.whitelist.clear()
+        log.debug("Cleared old phonenumber whitelist from RAM")
+        self.rfidwhitelist.clear()
+        log.debug("Cleared old RFID-number whitelist from RAM")
+
+        for key, value in jsonList.items():
+          if "PhoneNumber" in value:
+            for phoneNumber in value["PhoneNumber"]:
+              if phoneNumber[:4] == "+358":       # If phonenumber is finnish
+                phoneNumber = "0"+phoneNumber[4:] # Replace '+358' with an '0'
+              else:                               # Else number is international
+                phoneNumber = phoneNumber[1:]     # Only remove the '+'
+              self.whitelist[phoneNumber] = value["nick"]
+
+          if "RFID" in value:
+            for rfidTag in value["RFID"]:
+              self.rfidwhitelist[rfidTag] = value["nick"]
+
+        log.debug("Whitelist\n" + pformat(self.whitelist))
+        log.debug("RFID Whitelist\n " + pformat(self.rfidwhitelist))
+
+    except Exception as e:
+      log.error("Failed to read whitelist from " + whitelistFileName + ", error:\n" + str(e) + "\nExiting Gatekeeper")
+      self.exit_gatekeeper(1) # Tell gatekeeper to exit with error
+
+  def load_whitelist(self):
     whitelistFileName = os.path.join(sys.path[0], 'whitelist.json')
     log.debug("Loading SSH-key from " + os.path.expanduser(config['whitelist_ssh_keyfile']))
     key = paramiko.Ed25519Key.from_private_key_file(os.path.expanduser(config['whitelist_ssh_keyfile']), password=config['whitelist_ssh_password'].encode("ascii"))
     transport = paramiko.Transport((config['whitelist_ssh_server'], config['whitelist_ssh_port']))
-
     try:
       # Set allowed SSH/SFTP parameters, we (try to) only allow secure ones, tuple format
       transport.get_security_options().ciphers = ('aes256-ctr', 'aes192-ctr', 'aes128-ctr')
@@ -297,34 +335,10 @@ class GateKeeper:
       log.debug("Whitelist retrieved")
       transport.close()
       log.debug("SFTP-connection closed")
-      with open(whitelistFileName) as data_file:
-        jsonList = json.load(data_file)
       copyfile(whitelistFileName, whitelistFileName+".local")
+      log.debug("Copied " + whitelistFileName + " into " whitelistFileName + ".local")
     except Exception as e:
-      log.error("Failed to load whitelist from " + config['whitelist_ssh_server']  + ", error:\n" + str(e) + "\nLoading latest local whitelist copy")
-      with open(whitelistFileName + ".local") as data_file:
-        jsonList = json.load(data_file)
-
-    self.whitelist.clear()
-    log.debug("Cleared old phonenumber whitelist from RAM")
-    self.rfidwhitelist.clear()
-    log.debug("Cleared old RFID-number whitelist from RAM")
-
-    for key, value in jsonList.items():
-      if "PhoneNumber" in value:
-        for phoneNumber in value["PhoneNumber"]:
-          if phoneNumber[:4] == "+358":       # If phonenumber is finnish
-            phoneNumber = "0"+phoneNumber[4:] # Replace '+358' with an '0'
-          else:                               # Else number is international
-            phoneNumber = phoneNumber[1:]     # Only remove the '+'
-          self.whitelist[phoneNumber] = value["nick"]
-
-      if "RFID" in value:
-        for rfidTag in value["RFID"]:
-          self.rfidwhitelist[rfidTag] = value["nick"]
-
-    log.debug("Whitelist\n" + pformat(self.whitelist))
-    log.debug("RFID Whitelist\n " + pformat(self.rfidwhitelist))
+      log.error("Failed to load whitelist from " + config['whitelist_ssh_server']  + ", error:\n" + str(e))
 
   def wait_for_call(self):
     self.modem.data_channel.isOpen()
@@ -431,7 +445,7 @@ class GateKeeper:
       data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=1,writeTimeout=1)
       data_channel.isOpen()
       timestart = time.time()
-      timeout = 60 * 2
+      timeout = 60 * 2 # timeout set to 2 minutes
       while time.time() < timestart + timeout:
         line = data_channel.readline().strip()
         if line == "NO CARRIER":
@@ -443,6 +457,7 @@ class GateKeeper:
       mqtt_log.join()
 
   def start(self):
+    signum = 0                          # Set error status as clean
     try:
       self.wait_for_call()
       self.wait_for_tag()
@@ -455,11 +470,14 @@ class GateKeeper:
         raise
     else:
       log.warning("Unexpected exception, shutting down!")
+      signum = 1                        # Set error status as error
+
     finally:
       log.debug("Stopping GateKeeper")
       gatekeeper.stop_gatekeeping()
       log.debug("Shutdown tasks completed")
       log.info("GateKeeper Stopped")
+      self.exit_gatekeeper(signum)     # Tell gatekeeper to exit with error status
 
   def stop_gatekeeping(self):
     # Setup threads
@@ -468,7 +486,7 @@ class GateKeeper:
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     self.read_rfid_loop = False         # Tells RFID-reading loop to stop
-    self.read_whitelist_loop = False    # Tells whitelist loader loop to stop
+    self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
     closelock.start()                   # Close lock
     lightsoff.start()                   # Turn off lights
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
@@ -478,8 +496,11 @@ class GateKeeper:
     lightsoff.join()                    # Wait lights off to finish
     modemoff.join()                     # Wait modem off to finish
     self.wait_for_tag.join()            # Wait RFID tag reading loop to end
-    self.read_whitelist_interval.join() # Wait whitelist loader loop to end
+    self.load_whitelist_interval.join() # Wait whitelist loader loop to end
+
+  def exit_gatekeeper(self, signum):
     GPIO.cleanup()                      # Undo all GPIO setups we have done
+    sys.exit(signum)                    # Exit gatekeeper with signum as informal parameter (0 success, 1 error)
 
 logging.info("Started GateKeeper")
 
