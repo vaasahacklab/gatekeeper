@@ -336,7 +336,7 @@ class GateKeeper:
       transport.close()
       log.debug("SFTP-connection closed")
       copyfile(whitelistFileName, whitelistFileName+".local")
-      log.debug("Copied " + whitelistFileName + " into " whitelistFileName + ".local")
+      log.debug("Copied " + whitelistFileName + " into " + whitelistFileName + ".local")
     except Exception as e:
       log.error("Failed to load whitelist from " + config['whitelist_ssh_server']  + ", error:\n" + str(e))
 
