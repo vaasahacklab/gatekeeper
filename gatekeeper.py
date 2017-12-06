@@ -42,9 +42,9 @@ log.debug("Config file loaded.")
 # Setup GPIO output pins, GPIO.BOARD
 modem_power = 11
 modem_reset = 12
-lock = 32
-lights = 36
-out3 = 38
+lock = 36
+lights = 38
+out3 = 32
 out4 = 40
 
 # Setup GPIO input pins, GPIO.BOARD
@@ -167,7 +167,7 @@ class Pin:
     GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     # Door latch open/locked status
     GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.add_event_detect(latch, GPIO.BOTH, self.latch_moved)
+    GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
     # Currently unused inputs on input-relay board. initialize them anyway
     GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
@@ -268,18 +268,18 @@ class GateKeeper:
 
   def load_whitelist_interval(self):
     log.debug('Started whitelist interval refreshing loop')
-    timestart = time.time()
+    do_it = time.time()
     while self.load_whitelist_loop: # Loop until told otherwise
-      timeout = 60 * 60 # Execute hourly
-      if time.time() > timestart + timeout:
+      if time.time() > do_it:
         log.debug('Running whitelist interval refresh')
-        timestart = time.time()
         try:
           self.load_whitelist()
         except Exception as e:
           log.error("Failed to load whitelist from " + config['whitelist_ssh_server'] + ", error:\n" + str(e) + "\nNot updating whitelist")
         else:
           self.read_whitelist()
+        finally:
+          do_it = time.time() + 60 * 60 # Run again after an hour (seconds * minutes)
       time.sleep(1) # Let loop sleep for 1 second until next iteration
     log.debug('Stopped whitelist interval refreshing loop')
 
