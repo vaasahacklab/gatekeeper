@@ -1,11 +1,3 @@
-for key, value in config.items():
-     if "doorbell" in key:
-         for instance in value:
-             print("nimi on:", instance["name"], "uusi urli on:", 
-                instance["url"])
-
-
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
