@@ -12,10 +12,10 @@ from errno import EINTR     # Read interrupt
 import traceback            # For stacktrace
 import RPi.GPIO as GPIO     # For using Raspberry Pi GPIO
 import threading            # For enabling multitasking
-import requests             # HTTP library
+#import requests             # HTTP library
 import json                 # JSON parser, for config file
 
-import modem                # Modem inputmodule
+import modem                # Modem handler
 
 # Setup logging
 log = logging.getLogger("Gatekeeper")
