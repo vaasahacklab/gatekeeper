@@ -35,9 +35,8 @@ ssh root@<IP-address>
 Continue setupping
 
 ```
-apt-get --purge autoremove
-apt-get install python2.7 python-pip build-essential libssl-dev libffi-dev raspberrypi-sys-mods
-pip2 install virtualenv
+apt-get --purge -y autoremove
+apt-get install -y python3 python3-venv python3-dev build-essential libssl-dev libffi-dev raspberrypi-sys-mods
 ```
 
 Create user for running Gatekeeper, no admin privileges
@@ -47,6 +46,13 @@ groupadd gpio
 groupadd spi
 useradd -c "Vaasa Hacklab Gatekeeper" -U -m -d /home/gatekeeper -s /bin/bash -G dialout,gpio,spi gatekeeper
 passwd gatekeeper
+```
+
+Give user privileges to access GPIO without root
+
+```
+sudo chown root.gpio /dev/gpiomem
+sudo chmod g+rw /dev/gpiomem
 ```
 
 ## Remove tty and logging from serialport
@@ -75,8 +81,10 @@ dtparam=spi=on
 Setup logfile
 
 ```
-touch /var/log/gatekeeper.log
-chown gatekeeper:gatekeeper /var/log/gatekeeper.log
+touch /var/log/gatekeeper/gatekeeper.log
+touch /var/log/gatekeeper/audit.log
+chown gatekeeper:gatekeeper /var/log/gatekeeper/gatekeeper.log
+chown gatekeeper:gatekeeper /var/log/gatekeeper/audit.log
 ```
 
 Exit user root SSH-session
@@ -95,8 +103,7 @@ Fetch and setup Gatekeeper
 ```
 git clone https://github.com/vaasahacklab/gatekeeper.git
 cd gatekeeper
-mkdir venv
-virtualenv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 git clone https://github.com/lthiery/SPI-Py.git
@@ -127,7 +134,7 @@ ssh root@<IP-address>
 Copy gatekeeper systemd service -file into systemd and enable it
 
 ```
-cp /home/gatekeeper/gatekeeper/gatekeeper.service /lib/systemd/system/gatekeeper.service
+cp /home/gatekeeper/gatekeeper/gatekeeper.service.example /lib/systemd/system/gatekeeper.service
 systemctl daemon-reload
 systemctl enable gatekeeper.service
 exit

@@ -1,13 +1,72 @@
 {
-	"api_key": "",
-	"api_url": "",
-	"doorbell_url": "",
-	"whitelist_ssh_server": "",
-	"whitelist_ssh_port": 22,
-	"whitelist_ssh_username": "",
-	"whitelist_ssh_password": "",
-	"whitelist_ssh_keyfile": "",
-	"whitelist_ssh_getfile": "",
-	"MQTThost": ""
-}
+	"doorbell":
+	[
+		{
+			"name": "electronics",
+			"url": "https://musicbox:8080"
+		},
+		{
+			"name": "test2",
+			"url": "https://example.com"
+		}
+	],
 
+	"url_log":
+	{
+		"api_key": "",
+		"api_url": ""
+	},
+
+	"mqtt":
+	{
+		"host": ""
+	},
+
+	"whitelist":
+	{
+		"ssh_server": "",
+		"ssh_port": 22,
+		"ssh_username": "",
+		"ssh_password": "",
+		"ssh_keyfile": "",
+		"ssh_getfile": ""
+	},
+
+	"modem":
+	{
+		"port": "/dev/ttyAMA0",
+		"baudrate": 115200,
+		"parity": "serial.PARITY_ODD",
+		"stopbits": "serial.STOPBITS_ONE",
+		"bytesize": "serial.EIGHTBITS",
+		"xonxoff": "True",
+		"rtscts": "False",
+		"dsrdtr": "False",
+		
+		"gpio": 
+		{
+			"power": 11,
+			"reset": 12
+		}
+	},
+
+	"oldgpio":
+	{
+		"out":
+		{
+			"lock": 36,
+			"lights": 38,
+			"out3": 32,
+			"out4": 40
+		},
+
+		"in":
+		{
+			"latch": 29,
+			"lightstatus": 31,
+			"in3": 33,
+			"in4": 35,
+			"in5": 37
+		}
+	}
+}
