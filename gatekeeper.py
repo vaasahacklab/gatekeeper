@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import logging              # Logging facilities
+import logging, logging.config
 logging.config.fileConfig("logging.ini")
 
 import os                   # To call external stuff
@@ -25,7 +25,7 @@ audit_log = logging.getLogger("Audit")
 log.debug("Loading config file...")
 try:
     with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
-    config = json.load(f)
+        config = json.load(f)
 except Exception as e:
     log.debug('Failed loading config file: ' + str(e))
     raise e
