@@ -39,20 +39,25 @@ except Exception as e:
 
 log.debug("Config file loaded.")
 
-# Setup GPIO output pins, GPIO.BOARD
+# GPIO in
 modem_power = 11
 modem_reset = 12
-lock = 36
-lights = 38
-out3 = 32
-out4 = 40
 
-# Setup GPIO input pins, GPIO.BOARD
-latch = 29
-lightstatus = 31
-in3 = 33
-in4 = 35
-in5 = 37
+motor_left_switch = 36
+motor_right_switch = 37
+lock_left_switch = 38
+lock_right_switch = 40
+
+# GPIO out
+lock_turn_left_pin = 29
+lock_turn_right_pin = 31
+
+# Motor spin speed PWM
+motor_pwm_pin = 32
+
+# Motor PWM parameters
+motor_pwm_dutycycle = 90
+motor_pwm_hz = 5000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -162,62 +167,98 @@ class Pin:
     # Use RPi BOARD pin numbering convention
     GPIO.setmode(GPIO.BOARD)
 
-    # Set up GPIO input channels
-    # Light on/off status
-    GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    # Door latch open/locked status
-    GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
-    # Currently unused inputs on input-relay board. initialize them anyway
-    GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-
-    # Set up GPIO output channels
-    # Lock
-    GPIO.setup(lock, GPIO.OUT, initial=GPIO.HIGH)
-    log.debug("initialized lock, pin to high")
-    # Lights
-    GPIO.setup(lights, GPIO.OUT, initial=GPIO.HIGH)
-    log.debug("initialized lights, pin to high")
-    # Modem power button
     GPIO.setup(modem_power, GPIO.OUT, initial=GPIO.LOW)
-    log.debug("initialized modem_power, pin to low")
-    # Modem reset button
     GPIO.setup(modem_reset, GPIO.OUT, initial=GPIO.LOW)
-    log.debug("initialized modem_reset, pin to low")
-    # Currently unused outputs on output-relay board, initialize them anyway
-    GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
-    GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
 
-  def lockopen(self):
-    GPIO.output(lock, GPIO.LOW)
-    log.debug("Opened lock")
+    GPIO.setup(motor_left_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(motor_right_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(lock_left_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(lock_right_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(lock_turn_left_pin, GPIO.OUT, initial=GPIO.LOW)
+    GPIO.setup(lock_turn_right_pin, GPIO.OUT, initial=GPIO.LOW)
 
-  def lockclose(self):
-    GPIO.output(lock, GPIO.HIGH)
-    log.debug("Closed lock")
-
-  def lightson(self):
-    GPIO.output(lights, GPIO.LOW)
-    log.debug("Lights to on")
-
-  def lightsoff(self):
-    GPIO.output(lights, GPIO.HIGH)
-    log.debug("Lights to off")
+    GPIO.setup(motor_pwm_pin, GPIO.OUT, initial=GPIO.LOW)
+    self.enable_motor_pwm = GPIO.PWM(motor_pwm_pin, motor_pwm_hz)
 
   def send_pulse_lock(self):
-    self.lockopen()
-    # Keep pulse high for 5.5 second
-    time.sleep(5.5)
-    self.lockclose()
-    log.debug("Lock opening pulse done")
+    self.unlock_door()
+    time.sleep(10)
+    self.lock_door()
 
-  def latch_moved(channel, event):
-    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
-      log.debug('Door latch opened')
-    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
-      log.debug('Door latch closed')
+  def unlock_door(self):
+    print("\nBefore unlock function:"
+      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+      + "\n")
+    print("Unlocking door function")
+    if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch) == 0:
+      print("Lock motor already at leftmost position")
+    elif GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
+      print("DEBUG: Doorlock is locked, can open")
+      print("Unlocking doorlock")
+      motor_left_switch_pin_count = 0
+      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING, bouncetime=100)
+      GPIO.add_event_detect(motor_right_switch, GPIO.RISING, bouncetime=100)
+
+      self.enable_motor_pwm.start(motor_pwm_dutycycle)
+      GPIO.output(lock_turn_right_pin, GPIO.LOW)
+      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+      while not (motor_left_switch_pin_count == 3 and GPIO.event_detected(motor_right_switch)):
+        if GPIO.event_detected(motor_left_switch):
+          motor_left_switch_pin_count += 1
+          print("pin count: " + str(motor_left_switch_pin_count))
+      print("Unlock success")
+      GPIO.remove_event_detect(motor_left_switch)
+      GPIO.remove_event_detect(motor_right_switch)
+      self.stop_motor()
+    else:
+      print("Else reached, dunno lol")
+    print("after if")
+    print("\nAfter unlock function:"
+      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+      + "\n")
+
+  def lock_door(self):
+    print("\nBefore lock function:"
+      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+      + "\n")
+    print("Locking door function")
+    if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
+      print("Lock motor already at rightmost position")
+    elif GPIO.input(motor_left_switch) == 0 or GPIO.input(motor_right_switch) == 0:
+      print("Locking doorlock")
+      self.enable_motor_pwm.start(15)
+      GPIO.output(lock_turn_right_pin, GPIO.HIGH)
+      GPIO.output(lock_turn_left_pin, GPIO.LOW)
+
+      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        pass
+      print("Lock success")
+      GPIO.remove_event_detect(motor_right_switch)
+      self.stop_motor()
+    else:
+      print("Else reached, dunno lol")
+    print("after if")
+    print("\nAfter lock function:"
+      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+      + "\n")
+
+  def stop_motor(self):
+    GPIO.output(lock_turn_right_pin, GPIO.LOW)
+    GPIO.output(lock_turn_left_pin, GPIO.LOW)
+    self.enable_motor_pwm.stop()
+
+
+
+#  def latch_moved(channel, event):
+#    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
+#      log.debug('Door latch opened')
+#    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
+#      log.debug('Door latch closed')
 
 class GateKeeper:
   # Introduce program-loop parameters, initially disabled
@@ -481,19 +522,16 @@ class GateKeeper:
 
   def stop_gatekeeping(self):
     # Setup threads
-    closelock = threading.Thread(target=self.pin.lockclose, args=())
-    lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
+    closelock = threading.Thread(target=self.pin.lock_door, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     self.read_rfid_loop = False         # Tells RFID-reading loop to stop
     self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
     closelock.start()                   # Close lock
-    lightsoff.start()                   # Turn off lights
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
     self.linestatus.join()              # Wait linestatus thread to finish
     modemoff.start()                    # Tell modem to power off
     closelock.join()                    # Wait close lock to finish
-    lightsoff.join()                    # Wait lights off to finish
     modemoff.join()                     # Wait modem off to finish
     self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.load_whitelist_interval.join() # Wait whitelist loader loop to end
