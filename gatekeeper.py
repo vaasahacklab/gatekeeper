@@ -56,8 +56,8 @@ lock_turn_right_pin = 31
 motor_pwm_pin = 32
 
 # Motor PWM parameters
-motor_pwm_dutycycle = 90
-motor_pwm_hz = 5000
+motor_pwm_dutycycle = 70
+motor_pwm_hz = 6000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -204,7 +204,7 @@ class Pin:
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
-      while not (motor_left_switch_pin_count == 3 and GPIO.event_detected(motor_right_switch)):
+      while not (motor_left_switch_pin_count == 4 and GPIO.event_detected(motor_right_switch)):
         if GPIO.event_detected(motor_left_switch):
           motor_left_switch_pin_count += 1
           print("pin count: " + str(motor_left_switch_pin_count))
@@ -230,18 +230,31 @@ class Pin:
       print("Lock motor already at rightmost position")
     elif GPIO.input(motor_left_switch) == 0 or GPIO.input(motor_right_switch) == 0:
       print("Locking doorlock")
-      self.enable_motor_pwm.start(15)
+      self.enable_motor_pwm.start(motor_pwm_dutycycle)
       GPIO.output(lock_turn_right_pin, GPIO.HIGH)
       GPIO.output(lock_turn_left_pin, GPIO.LOW)
 
       while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
         pass
-      print("Lock success")
-      GPIO.remove_event_detect(motor_right_switch)
       self.stop_motor()
+      print("Lock success")
+#      GPIO.remove_event_detect(motor_right_switch)
+      time.sleep(0.3)
+
+      print("Adjusting lock postition to be exactly locked")
+      self.enable_motor_pwm.start(13)
+      GPIO.output(lock_turn_right_pin, GPIO.LOW)
+      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        pass
+      self.stop_motor()
+      print("Adjusting success")
+
     else:
       print("Else reached, dunno lol")
     print("after if")
+    time.sleep(0.1)
     print("\nAfter lock function:"
       + "\nMotor left: " + str(GPIO.input(motor_left_switch))
       + "\nMotor right: " + str(GPIO.input(motor_right_switch))
@@ -275,6 +288,7 @@ class GateKeeper:
     self.config = config
     self.pin = Pin()                # GPIO pins
     self.read_whitelist()           # Read whitelist on startup
+    self.pin.lock_door()            # Lock door, this ensures correct starting state if locking state is unkown
     self.load_whitelist_interval = threading.Thread(target=self.load_whitelist_interval, args=())
     self.load_whitelist_interval.start() # Update whitelist perioidically
     self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
