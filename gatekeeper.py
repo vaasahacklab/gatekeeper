@@ -48,6 +48,8 @@ motor_right_switch = 37
 lock_left_switch = 38
 lock_right_switch = 40
 
+button_open = 33
+
 # GPIO out
 lock_turn_left_pin = 29
 lock_turn_right_pin = 31
@@ -180,6 +182,20 @@ class Pin:
     GPIO.setup(motor_pwm_pin, GPIO.OUT, initial=GPIO.LOW)
     self.enable_motor_pwm = GPIO.PWM(motor_pwm_pin, motor_pwm_hz)
 
+    GPIO.setup(button_open, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+
+  def read_button_open(self):
+    log.debug("Door opening button enabled")
+    self.enable_button = True
+    while self.enable_button:
+      channel = GPIO.wait_for_edge(button_open, GPIO.FALLING, timeout=1000)
+      if channel is None:
+        pass
+      else:
+        log.info("Door opening button pressed")
+        self.send_pulse_lock()
+    log.debug("Door opening button disabled")
+
   def send_pulse_lock(self):
     self.unlock_door()
     time.sleep(10)
@@ -267,6 +283,7 @@ class Pin:
 
 
 
+
 #  def latch_moved(channel, event):
 #    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
 #      log.debug('Door latch opened')
@@ -279,6 +296,7 @@ class GateKeeper:
   read_rfid_loop = False
   linestatus = False
   load_whitelist_loop = False
+  enable_button = False
 
   def __init__(self, config):
     self.rfidwhitelist = {}         # Introduce whitelist parameters
@@ -287,6 +305,8 @@ class GateKeeper:
     self.load_whitelist_loop = True # Enable refreshing whitelist perioidically
     self.config = config
     self.pin = Pin()                # GPIO pins
+    self.button = threading.Thread(target=self.pin.read_button_open, args=())
+    self.button.start()             # Read door opening button
     self.read_whitelist()           # Read whitelist on startup
     self.pin.lock_door()            # Lock door, this ensures correct starting state if locking state is unkown
     self.load_whitelist_interval = threading.Thread(target=self.load_whitelist_interval, args=())
@@ -541,6 +561,7 @@ class GateKeeper:
     # Do shutting down tasks
     self.read_rfid_loop = False         # Tells RFID-reading loop to stop
     self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
+    self.pin.enable_button = False      # Tells button reader to stop
     closelock.start()                   # Close lock
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
     self.linestatus.join()              # Wait linestatus thread to finish
@@ -549,6 +570,7 @@ class GateKeeper:
     modemoff.join()                     # Wait modem off to finish
     self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.load_whitelist_interval.join() # Wait whitelist loader loop to end
+    self.button.join()                  # Wait button reader loop to end
 
   def exit_gatekeeper(self, signum):
     GPIO.cleanup()                      # Undo all GPIO setups we have done
