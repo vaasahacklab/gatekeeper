@@ -202,19 +202,18 @@ class Pin:
     self.lock_door()
 
   def unlock_door(self):
-    print("\nBefore unlock function:"
-      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-      + "\n")
-    print("Unlocking door function")
+#    print("\nBefore unlock function:"
+#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+#      + "\n")
     if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch) == 0:
-      print("Lock motor already at leftmost position")
+      log.debug("Lock motor already at leftmost position")
     elif GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
-      print("DEBUG: Doorlock is locked, can open")
-      print("Unlocking doorlock")
+      log.debug("Doorlock is locked, can open")
+      log.info("Unlocking door")
       motor_left_switch_pin_count = 0
-      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING, bouncetime=100)
-      GPIO.add_event_detect(motor_right_switch, GPIO.RISING, bouncetime=100)
+      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING, bouncetime=50)
+      GPIO.add_event_detect(motor_right_switch, GPIO.RISING, bouncetime=50)
 
       self.enable_motor_pwm.start(motor_pwm_dutycycle)
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
@@ -223,29 +222,29 @@ class Pin:
       while not (motor_left_switch_pin_count == 3 and GPIO.event_detected(motor_right_switch)):
         if GPIO.event_detected(motor_left_switch):
           motor_left_switch_pin_count += 1
-          print("pin count: " + str(motor_left_switch_pin_count))
-      print("Unlock success")
+          #print("pin count: " + str(motor_left_switch_pin_count))
+      log.debug("Unlock success")
       GPIO.remove_event_detect(motor_left_switch)
       GPIO.remove_event_detect(motor_right_switch)
       self.stop_motor()
     else:
-      print("Else reached, dunno lol")
-    print("after if")
-    print("\nAfter unlock function:"
-      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-      + "\n")
+      log.debug("Else reached, dunno lol")
+#    print("after if")
+#    print("\nAfter unlock function:"
+#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+#      + "\n")
 
   def lock_door(self):
-    print("\nBefore lock function:"
-      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-      + "\n")
-    print("Locking door function")
+#    print("\nBefore lock function:"
+#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+#      + "\n")
+#    print("Locking door function")
     if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
-      print("Lock motor already at rightmost position")
+      log.debug("Lock motor already at rightmost position")
     elif GPIO.input(motor_left_switch) == 0 or GPIO.input(motor_right_switch) == 0:
-      print("Locking doorlock")
+      log.info("Locking door")
       self.enable_motor_pwm.start(motor_pwm_dutycycle)
       GPIO.output(lock_turn_right_pin, GPIO.HIGH)
       GPIO.output(lock_turn_left_pin, GPIO.LOW)
@@ -253,11 +252,10 @@ class Pin:
       while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
         pass
       self.stop_motor()
-      print("Lock success")
-#      GPIO.remove_event_detect(motor_right_switch)
-      time.sleep(0.3)
+      log.debug("Lock success")
+      time.sleep(0.5)
 
-      print("Adjusting lock postition to be exactly locked")
+      log.debug("Adjusting lock motor-ring postition to be exactly locked")
       self.enable_motor_pwm.start(13)
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
@@ -265,30 +263,21 @@ class Pin:
       while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
         pass
       self.stop_motor()
-      print("Adjusting success")
+      log.debug("Adjusting lock motor-ring postition success")
 
     else:
-      print("Else reached, dunno lol")
-    print("after if")
-    time.sleep(0.1)
-    print("\nAfter lock function:"
-      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-      + "\n")
+      log.debug("Else reached, dunno lol")
+#    print("after if")
+#    print("\nAfter lock function:"
+#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
+#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
+#      + "\n")
 
   def stop_motor(self):
+    log.debug("Stopping lock motor")
     GPIO.output(lock_turn_right_pin, GPIO.LOW)
     GPIO.output(lock_turn_left_pin, GPIO.LOW)
     self.enable_motor_pwm.stop()
-
-
-
-
-#  def latch_moved(channel, event):
-#    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
-#      log.debug('Door latch opened')
-#    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
-#      log.debug('Door latch closed')
 
 class GateKeeper:
   # Introduce program-loop parameters, initially disabled
