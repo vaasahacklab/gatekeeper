@@ -58,7 +58,7 @@ lock_turn_right_pin = 31
 motor_pwm_pin = 32
 
 # Motor PWM parameters
-motor_pwm_dutycycle = 70
+motor_pwm_dutycycle = 100
 motor_pwm_hz = 6000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
@@ -194,6 +194,7 @@ class Pin:
       else:
         log.info("Door opening button pressed")
         self.send_pulse_lock()
+        #log.error("Door opening button disabled, slightest electrical noise triggers stuff")
     log.debug("Door opening button disabled")
 
   def send_pulse_lock(self):
@@ -219,7 +220,7 @@ class Pin:
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
-      while not (motor_left_switch_pin_count == 3 and GPIO.event_detected(motor_right_switch)):
+      while not (motor_left_switch_pin_count == 4 and GPIO.event_detected(motor_right_switch)):
         if GPIO.event_detected(motor_left_switch):
           motor_left_switch_pin_count += 1
           #print("pin count: " + str(motor_left_switch_pin_count))
@@ -256,7 +257,7 @@ class Pin:
       time.sleep(0.5)
 
       log.debug("Adjusting lock motor-ring postition to be exactly locked")
-      self.enable_motor_pwm.start(13)
+      self.enable_motor_pwm.start(20)
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
