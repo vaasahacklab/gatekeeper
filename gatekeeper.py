@@ -58,8 +58,8 @@ lock_turn_right_pin = 31
 motor_pwm_pin = 32
 
 # Motor PWM parameters
-motor_pwm_dutycycle = 100
-motor_pwm_hz = 6000
+motor_pwm_dutycycle = 50
+motor_pwm_hz = 10000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -213,14 +213,14 @@ class Pin:
       log.debug("Doorlock is locked, can open")
       log.info("Unlocking door")
       motor_left_switch_pin_count = 0
-      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING, bouncetime=50)
-      GPIO.add_event_detect(motor_right_switch, GPIO.RISING, bouncetime=50)
+      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING)
+      GPIO.add_event_detect(motor_right_switch, GPIO.RISING)
 
       self.enable_motor_pwm.start(motor_pwm_dutycycle)
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
-      while not (motor_left_switch_pin_count == 4 and GPIO.event_detected(motor_right_switch)):
+      while not (motor_left_switch_pin_count >= 3 and GPIO.event_detected(motor_right_switch) or GPIO.input(lock_left_switch)):
         if GPIO.event_detected(motor_left_switch):
           motor_left_switch_pin_count += 1
           #print("pin count: " + str(motor_left_switch_pin_count))
@@ -229,12 +229,13 @@ class Pin:
       GPIO.remove_event_detect(motor_right_switch)
       self.stop_motor()
     else:
-      log.debug("Else reached, dunno lol")
+      log.error("Else reached, dunno lol")
 #    print("after if")
 #    print("\nAfter unlock function:"
 #      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
 #      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
 #      + "\n")
+
 
   def lock_door(self):
 #    print("\nBefore lock function:"
@@ -257,7 +258,7 @@ class Pin:
       time.sleep(0.5)
 
       log.debug("Adjusting lock motor-ring postition to be exactly locked")
-      self.enable_motor_pwm.start(20)
+      self.enable_motor_pwm.start(15)
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
@@ -267,7 +268,7 @@ class Pin:
       log.debug("Adjusting lock motor-ring postition success")
 
     else:
-      log.debug("Else reached, dunno lol")
+      log.error("Else reached, dunno lol")
 #    print("after if")
 #    print("\nAfter lock function:"
 #      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
