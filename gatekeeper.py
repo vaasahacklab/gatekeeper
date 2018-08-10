@@ -58,7 +58,7 @@ lock_turn_right_pin = 31
 motor_pwm_pin = 32
 
 # Motor PWM parameters
-motor_pwm_dutycycle = 50
+motor_pwm_dutycycle = 55
 motor_pwm_hz = 10000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
@@ -220,16 +220,24 @@ class Pin:
       GPIO.output(lock_turn_right_pin, GPIO.LOW)
       GPIO.output(lock_turn_left_pin, GPIO.HIGH)
 
+      timeout = time.time() + 5 # In case of mechanism malfunction stop motor trying indefinitely
+      timeouthappened = False
+
       while not (motor_left_switch_pin_count >= 3 and GPIO.event_detected(motor_right_switch) or GPIO.input(lock_left_switch)):
         if GPIO.event_detected(motor_left_switch):
           motor_left_switch_pin_count += 1
           #print("pin count: " + str(motor_left_switch_pin_count))
-      log.debug("Unlock success")
+        if time.time() > timeout:
+          log.error("Lock opening cycle timeout!")
+          timeouthappened = True
+          break
+      if not timeouthappened:
+        log.debug("Unlock success")
       GPIO.remove_event_detect(motor_left_switch)
       GPIO.remove_event_detect(motor_right_switch)
       self.stop_motor()
     else:
-      log.error("Else reached, dunno lol")
+      log.error("Opening lock: Else reached, dunno lol")
 #    print("after if")
 #    print("\nAfter unlock function:"
 #      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
@@ -251,21 +259,29 @@ class Pin:
       GPIO.output(lock_turn_right_pin, GPIO.HIGH)
       GPIO.output(lock_turn_left_pin, GPIO.LOW)
 
-      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
-        pass
-      self.stop_motor()
-      log.debug("Lock success")
-      time.sleep(0.5)
-
-      log.debug("Adjusting lock motor-ring postition to be exactly locked")
-      self.enable_motor_pwm.start(15)
-      GPIO.output(lock_turn_right_pin, GPIO.LOW)
-      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+      timeout = time.time() + 5 # In case of mechanism malfunction stop motor trying indefinitely
+      timeouthappened = False
 
       while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        if time.time() > timeout:
+          log.error("Lock closing cycle timeout!")
+          timeouthappened = True
+          break
         pass
       self.stop_motor()
-      log.debug("Adjusting lock motor-ring postition success")
+      if not timeouthappened:
+        log.debug("Lock success")
+        time.sleep(0.5)
+
+        log.debug("Adjusting lock motor-ring postition to be exactly locked")
+        self.enable_motor_pwm.start(10)
+        GPIO.output(lock_turn_right_pin, GPIO.LOW)
+        GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+        while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+          pass
+        self.stop_motor()
+        log.debug("Adjusting lock motor-ring postition success")
 
     else:
       log.error("Else reached, dunno lol")
