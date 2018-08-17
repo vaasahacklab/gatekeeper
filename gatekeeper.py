@@ -58,7 +58,7 @@ lock_turn_right_pin = 31
 motor_pwm_pin = 32
 
 # Motor PWM parameters
-motor_pwm_dutycycle = 55
+motor_pwm_dutycycle = 45
 motor_pwm_hz = 10000
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
@@ -271,16 +271,25 @@ class Pin:
       self.stop_motor()
       if not timeouthappened:
         log.debug("Lock success")
-        time.sleep(0.5)
+      time.sleep(0.5)
 
-        log.debug("Adjusting lock motor-ring postition to be exactly locked")
-        self.enable_motor_pwm.start(10)
-        GPIO.output(lock_turn_right_pin, GPIO.LOW)
-        GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+      log.debug("Adjusting lock motor-ring postition to be exactly locked")
 
-        while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
-          pass
-        self.stop_motor()
+      timeout = time.time() + 10 # In case of mechanism malfunction stop motor trying indefinitely
+      timeouthappened = False
+
+      self.enable_motor_pwm.start(10)
+      GPIO.output(lock_turn_right_pin, GPIO.LOW)
+      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        if time.time() > timeout:
+          log.error("Lock adjusting cycle timeout!")
+          timeouthappened = True
+          break
+        pass
+      self.stop_motor()
+      if not timeouthappened:
         log.debug("Adjusting lock motor-ring postition success")
 
     else:
