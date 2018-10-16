@@ -1,7 +1,5 @@
 {
-	"doorbell":
-	[
-		{
+	"doorbell": [{
 			"name": "electronics",
 			"url": "http://example.com:8080"
 		},
@@ -11,15 +9,14 @@
 		}
 	],
 
-	"url_log":
-	{
-		"api_key": "LongRandomKey",
-		"api_url": "https://example.com/gatekeeper/log/"
-	},
+	"url_log": [{
+			"name": "LogUrl1",
+			"api_key": "LongRandomKey",
+			"api_url": "https://example.com/gatekeeper/log/"
+		}
+	],
 
-	"mqtt":
-	[
-		{
+	"mqtt": [{
 			"name": "MQTTlogger",
 			"host": "mqttlog.lan"
 		},
@@ -29,10 +26,8 @@
 		}
 	],
 
-	"whitelist":
-	{
-		"ssh":
-		{
+	"whitelist": {
+		"ssh": {
 			"server": "whitelist.example.com",
 			"port": 22,
 			"username": "username",
@@ -42,8 +37,7 @@
 		}
 	},
 
-	"modem":
-	{
+	"modem": {
 		"port": "/dev/ttyAMA0",
 		"baudrate": 115200,
 		"parity": "serial.PARITY_ODD",
@@ -53,8 +47,7 @@
 		"rtscts": "False",
 		"dsrdtr": "False",
 
-		"gpio": 
-		{
+		"gpio": {
 			"power": 11,
 			"reset": 12
 		}
