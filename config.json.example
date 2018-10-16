@@ -1,13 +1,55 @@
 {
-	"api_key": "",
-	"api_url": "",
-	"doorbell_url": "",
-	"whitelist_ssh_server": "",
-	"whitelist_ssh_port": 22,
-	"whitelist_ssh_username": "",
-	"whitelist_ssh_password": "",
-	"whitelist_ssh_keyfile": "",
-	"whitelist_ssh_getfile": "",
-	"MQTThost": ""
-}
+    "doorbell": [{
+            "name": "electronics",
+            "url": "http://example.com:8080"
+        },
+        {
+            "name": "test2",
+            "url": "https://example.com"
+        }
+    ],
 
+    "url_log": [{
+            "name": "LogUrl1",
+            "api_key": "LongRandomKey",
+            "api_url": "https://example.com/gatekeeper/log/"
+        }
+    ],
+
+    "mqtt": [{
+            "name": "MQTTlogger",
+            "host": "mqttlog.lan"
+        },
+        {
+            "name": "Another interesting MQTT",
+            "host": "nxdomain.local"
+        }
+    ],
+
+    "whitelist": {
+        "ssh": {
+            "server": "whitelist.example.com",
+            "port": 22,
+            "username": "username",
+            "password": "LongRamblyPasswordOrPasskeyForKeyFile",
+            "keyfile": "~/.ssh/whitelist",
+            "getfile": "/files/whitelist.json"
+        }
+    },
+
+    "modem": {
+        "port": "/dev/ttyAMA0",
+        "baudrate": 115200,
+        "parity": "serial.PARITY_ODD",
+        "stopbits": "serial.STOPBITS_ONE",
+        "bytesize": "serial.EIGHTBITS",
+        "xonxoff": "True",
+        "rtscts": "False",
+        "dsrdtr": "False",
+
+        "gpio": {
+            "power": 11,
+            "reset": 12
+        }
+    }
+}

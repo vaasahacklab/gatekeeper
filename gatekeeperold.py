@@ -1,21 +1,34 @@
+for key, value in config.items():
+     if "doorbell" in key:
+         for instance in value:
+             print("nimi on:", instance["name"], "uusi urli on:", 
+                instance["url"])
+
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import logging, logging.config
+import logging              # Logging facilities
 logging.config.fileConfig("logging.ini")
 
+import re                   # Regular expressions
 import os                   # To call external stuff
 import sys                  # System calls
 import signal               # Catch kill signal
+import time                 # For the sleep function
 import select               # For select.error
 from errno import EINTR     # Read interrupt
 import traceback            # For stacktrace
 import RPi.GPIO as GPIO     # For using Raspberry Pi GPIO
 import threading            # For enabling multitasking
-#import requests             # HTTP library
+import requests             # HTTP library
+import MFRC522              # RFID reader
 import json                 # JSON parser, for config file
-
-import modem                # Modem handler
+from shutil import copyfile # File copying
+import paramiko             # SSH access library
+import paho.mqtt.publish as publish # MQTT messages
+from pprint import pformat  # Pretty Print formatting
 
 # Setup logging
 log = logging.getLogger("Gatekeeper")
@@ -25,136 +38,11 @@ audit_log = logging.getLogger("Audit")
 log.debug("Loading config file...")
 try:
     with open(os.path.join(sys.path[0], 'config.json'), 'r') as f:
-        config = json.load(f)
+    config = json.load(f)
 except Exception as e:
     log.debug('Failed loading config file: ' + str(e))
     raise e
 log.debug("Config file loaded.")
-
-<<<<<<< HEAD
-# GPIO in
-modem_power = 11
-modem_reset = 12
-
-motor_left_switch = 36
-motor_right_switch = 37
-lock_left_switch = 38
-lock_right_switch = 40
-
-button_open = 33
-
-# GPIO out
-lock_turn_left_pin = 29
-lock_turn_right_pin = 31
-
-# Motor spin speed PWM
-motor_pwm_pin = 32
-
-# Motor PWM parameters
-motor_pwm_dutycycle = 45
-motor_pwm_hz = 10000
-
-# Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
-# Data port (Can be same or diffirent as command port)
-data_port = '/dev/ttyAMA0'
-data_baudrate = 115200
-data_parity = serial.PARITY_ODD
-data_stopbits = serial.STOPBITS_ONE
-data_bytesize = serial.EIGHTBITS
-data_xonxoff = True
-data_rtscts = False
-data_dsrdtr = False
-
-# Command port (Can be same or diffirent as data port)
-command_port = '/dev/ttyAMA0'
-command_baudrate = 115200
-command_parity = serial.PARITY_ODD
-command_stopbits = serial.STOPBITS_ONE
-command_bytesize = serial.EIGHTBITS
-command_xonxoff = True
-command_rtscts = False
-command_dsrdtr = False
-
-# Setup over, start defining classes
-class Modem:
-  linestatus_loop = False
-  data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=None,writeTimeout=1)
-
-  def enable_caller_id(self):
-    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=0,writeTimeout=1)
-    command_channel.isOpen()
-    command_channel.write("AT+CLIP=1" + "\r\n")
-    command_channel.close()
-    log.debug("Enabled caller ID")
-
-  def hangup(self):
-    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=0,writeTimeout=1)
-    command_channel.isOpen()
-    command_channel.write("AT+HVOIC" + "\r\n") # Disconnect only voice call (for example keep possible existing dataconnection online)
-    command_channel.close()
-    log.debug("We hung up")
-
-  def power_on(self):
-    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=0.2,writeTimeout=1)
-    command_channel.isOpen()
-    command_channel.write("AT"+"\r\n")
-    command_channel.readline()
-    buffer = command_channel.readline()
-    if not buffer:
-      log.debug("Powering on modem")
-      GPIO.output(modem_power, GPIO.HIGH)
-      while True:
-        line = command_channel.readline().strip()
-        if line == "RDY":
-         log.debug("Modem powered on")
-         break
-      GPIO.output(modem_power, GPIO.LOW)
-      log.debug("Waiting modem to be call ready")
-      while True:
-        line = command_channel.readline().strip()
-        if line == "Call Ready":
-         log.debug("Modem call ready")
-         break
-    else:
-      log.debug("Modem already powered")
-
-  def power_off(self):
-    command_channel = serial.Serial(port=command_port,baudrate=command_baudrate,parity=command_parity,stopbits=command_stopbits,bytesize=command_bytesize,xonxoff=command_xonxoff,rtscts=command_rtscts,dsrdtr=command_dsrdtr,timeout=0.2,writeTimeout=1)
-    command_channel.isOpen()
-    command_channel.write("AT"+"\r\n")
-    command_channel.readline()
-    buffer = command_channel.readline()
-    if not buffer:
-      log.debug("Modem already powered off")
-    else:
-      log.debug("Powering off modem")
-      GPIO.output(modem_power, GPIO.HIGH)
-      while True:
-        line = command_channel.readline().strip()
-        if line == "NORMAL POWER DOWN":
-          log.debug("Modem powered off")
-          break
-      GPIO.output(modem_power, GPIO.LOW)
-      self.data_channel.close()
-
-  def reset(self):
-    log.debug("Resetting modem")
-    GPIO.output(modem_reset, GPIO.HIGH)
-    time.sleep(1)
-    GPIO.output(modem_reset, GPIO.LOW)
-    log.debug("Modem reset done")
-
-  def linestatus(self):
-    self.linestatus_loop = True
-    do_it = time.time()     # Set execute loop timing variable to "now"
-    log.debug("Started linestatus check")
-    while self.linestatus_loop:
-      if time.time() > do_it:   # Execute these only if "now" is more than timing variable
-        self.data_channel.isOpen()
-        self.data_channel.write("AT+CREG?"+"\r\n")
-        do_it = time.time() + 60  # Set timing variable 60 seconds from "now"
-      time.sleep(1)
-    log.debug("Stopped linestatus check")
 
 class Pin:
   # Init (activate pin)
@@ -162,142 +50,62 @@ class Pin:
     # Use RPi BOARD pin numbering convention
     GPIO.setmode(GPIO.BOARD)
 
+    # Set up GPIO input channels
+    # Light on/off status
+    GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    # Door latch open/locked status
+    GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
+    # Currently unused inputs on input-relay board. initialize them anyway
+    GPIO.setup(in3, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+
+    # Set up GPIO output channels
+    # Lock
+    GPIO.setup(lock, GPIO.OUT, initial=GPIO.HIGH)
+    log.debug("initialized lock, pin to high")
+    # Lights
+    GPIO.setup(lights, GPIO.OUT, initial=GPIO.HIGH)
+    log.debug("initialized lights, pin to high")
+    # Modem power button
     GPIO.setup(modem_power, GPIO.OUT, initial=GPIO.LOW)
+    log.debug("initialized modem_power, pin to low")
+    # Modem reset button
     GPIO.setup(modem_reset, GPIO.OUT, initial=GPIO.LOW)
+    log.debug("initialized modem_reset, pin to low")
+    # Currently unused outputs on output-relay board, initialize them anyway
+    GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
+    GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
 
-    GPIO.setup(motor_left_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(motor_right_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(lock_left_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(lock_right_switch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(lock_turn_left_pin, GPIO.OUT, initial=GPIO.LOW)
-    GPIO.setup(lock_turn_right_pin, GPIO.OUT, initial=GPIO.LOW)
+  def lockopen(self):
+    GPIO.output(lock, GPIO.LOW)
+    log.debug("Opened lock")
 
-    GPIO.setup(motor_pwm_pin, GPIO.OUT, initial=GPIO.LOW)
-    self.enable_motor_pwm = GPIO.PWM(motor_pwm_pin, motor_pwm_hz)
+  def lockclose(self):
+    GPIO.output(lock, GPIO.HIGH)
+    log.debug("Closed lock")
 
-    GPIO.setup(button_open, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+  def lightson(self):
+    GPIO.output(lights, GPIO.LOW)
+    log.debug("Lights to on")
 
-  def read_button_open(self):
-    log.debug("Door opening button enabled")
-    self.enable_button = True
-    while self.enable_button:
-      channel = GPIO.wait_for_edge(button_open, GPIO.FALLING, timeout=1000)
-      if channel is None:
-        pass
-      else:
-        log.info("Door opening button pressed")
-        self.send_pulse_lock()
-        #log.error("Door opening button disabled, slightest electrical noise triggers stuff")
-    log.debug("Door opening button disabled")
+  def lightsoff(self):
+    GPIO.output(lights, GPIO.HIGH)
+    log.debug("Lights to off")
 
   def send_pulse_lock(self):
-    self.unlock_door()
-    time.sleep(10)
-    self.lock_door()
+    self.lockopen()
+    # Keep pulse high for 5.5 second
+    time.sleep(5.5)
+    self.lockclose()
+    log.debug("Lock opening pulse done")
 
-  def unlock_door(self):
-#    print("\nBefore unlock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
-    if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch) == 0:
-      log.debug("Lock motor already at leftmost position")
-    elif GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
-      log.debug("Doorlock is locked, can open")
-      log.info("Unlocking door")
-      motor_left_switch_pin_count = 0
-      GPIO.add_event_detect(motor_left_switch, GPIO.FALLING)
-      GPIO.add_event_detect(motor_right_switch, GPIO.RISING)
-
-      self.enable_motor_pwm.start(motor_pwm_dutycycle)
-      GPIO.output(lock_turn_right_pin, GPIO.LOW)
-      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
-
-      timeout = time.time() + 5 # In case of mechanism malfunction stop motor trying indefinitely
-      timeouthappened = False
-
-      while not (motor_left_switch_pin_count >= 3 and GPIO.event_detected(motor_right_switch) or GPIO.input(lock_left_switch)):
-        if GPIO.event_detected(motor_left_switch):
-          motor_left_switch_pin_count += 1
-          #print("pin count: " + str(motor_left_switch_pin_count))
-        if time.time() > timeout:
-          log.error("Lock opening cycle timeout!")
-          timeouthappened = True
-          break
-      if not timeouthappened:
-        log.debug("Unlock success")
-      GPIO.remove_event_detect(motor_left_switch)
-      GPIO.remove_event_detect(motor_right_switch)
-      self.stop_motor()
-    else:
-      log.error("Opening lock: Else reached, dunno lol")
-#    print("after if")
-#    print("\nAfter unlock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
-
-
-  def lock_door(self):
-#    print("\nBefore lock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
-#    print("Locking door function")
-    if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
-      log.debug("Lock motor already at rightmost position")
-    elif GPIO.input(motor_left_switch) == 0 or GPIO.input(motor_right_switch) == 0:
-      log.info("Locking door")
-      self.enable_motor_pwm.start(motor_pwm_dutycycle)
-      GPIO.output(lock_turn_right_pin, GPIO.HIGH)
-      GPIO.output(lock_turn_left_pin, GPIO.LOW)
-
-      timeout = time.time() + 5 # In case of mechanism malfunction stop motor trying indefinitely
-      timeouthappened = False
-
-      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
-        if time.time() > timeout:
-          log.error("Lock closing cycle timeout!")
-          timeouthappened = True
-          break
-        pass
-      self.stop_motor()
-      if not timeouthappened:
-        log.debug("Lock success")
-      time.sleep(0.5)
-
-      log.debug("Adjusting lock motor-ring postition to be exactly locked")
-
-      timeout = time.time() + 10 # In case of mechanism malfunction stop motor trying indefinitely
-      timeouthappened = False
-
-      self.enable_motor_pwm.start(10)
-      GPIO.output(lock_turn_right_pin, GPIO.LOW)
-      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
-
-      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
-        if time.time() > timeout:
-          log.error("Lock adjusting cycle timeout!")
-          timeouthappened = True
-          break
-        pass
-      self.stop_motor()
-      if not timeouthappened:
-        log.debug("Adjusting lock motor-ring postition success")
-
-    else:
-      log.error("Else reached, dunno lol")
-#    print("after if")
-#    print("\nAfter lock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
-
-  def stop_motor(self):
-    log.debug("Stopping lock motor")
-    GPIO.output(lock_turn_right_pin, GPIO.LOW)
-    GPIO.output(lock_turn_left_pin, GPIO.LOW)
-    self.enable_motor_pwm.stop()
+  def latch_moved(channel, event):
+    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
+      log.debug('Door latch opened')
+    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
+      log.debug('Door latch closed')
 
 class GateKeeper:
   # Introduce program-loop parameters, initially disabled
@@ -305,11 +113,7 @@ class GateKeeper:
   read_rfid_loop = False
   linestatus = False
   load_whitelist_loop = False
-  enable_button = False
 
-=======
-class GateKeeper:
->>>>>>> a4acdda97f9220a675c403600226338fa20755af
   def __init__(self, config):
     self.rfidwhitelist = {}         # Introduce whitelist parameters
     self.whitelist = {}
@@ -317,10 +121,7 @@ class GateKeeper:
     self.load_whitelist_loop = True # Enable refreshing whitelist perioidically
     self.config = config
     self.pin = Pin()                # GPIO pins
-    self.button = threading.Thread(target=self.pin.read_button_open, args=())
-    self.button.start()             # Read door opening button
     self.read_whitelist()           # Read whitelist on startup
-    self.pin.lock_door()            # Lock door, this ensures correct starting state if locking state is unkown
     self.load_whitelist_interval = threading.Thread(target=self.load_whitelist_interval, args=())
     self.load_whitelist_interval.start() # Update whitelist perioidically
     self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
@@ -329,7 +130,6 @@ class GateKeeper:
     self.modem.power_on()
     self.modem.enable_caller_id()
     self.linestatus = threading.Thread(target=self.modem.linestatus, args=())
-<<<<<<< HEAD
     self.linestatus.start()         # Check we are still registered on cellular network
 
   def url_log(self, name, number):
@@ -569,21 +369,22 @@ class GateKeeper:
 
   def stop_gatekeeping(self):
     # Setup threads
-    closelock = threading.Thread(target=self.pin.lock_door, args=())
+    closelock = threading.Thread(target=self.pin.lockclose, args=())
+    lightsoff = threading.Thread(target=self.pin.lightsoff, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     self.read_rfid_loop = False         # Tells RFID-reading loop to stop
     self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
-    self.pin.enable_button = False      # Tells button reader to stop
     closelock.start()                   # Close lock
+    lightsoff.start()                   # Turn off lights
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
     self.linestatus.join()              # Wait linestatus thread to finish
     modemoff.start()                    # Tell modem to power off
     closelock.join()                    # Wait close lock to finish
+    lightsoff.join()                    # Wait lights off to finish
     modemoff.join()                     # Wait modem off to finish
     self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.load_whitelist_interval.join() # Wait whitelist loader loop to end
-    self.button.join()                  # Wait button reader loop to end
 
   def exit_gatekeeper(self, signum):
     GPIO.cleanup()                      # Undo all GPIO setups we have done
@@ -600,6 +401,3 @@ signal.signal(signal.SIGINT, shutdown_handler)
 signal.signal(signal.SIGTERM, shutdown_handler)
 
 gatekeeper.start()
-=======
-    self.linestatus.start()         # Check we are still registered on cellular network
->>>>>>> a4acdda97f9220a675c403600226338fa20755af

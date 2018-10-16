@@ -9,6 +9,7 @@ Group=gatekeeper
 WorkingDirectory=/home/gatekeeper/gatekeeper
 ExecStart=/home/gatekeeper/gatekeeper/venv/bin/python gatekeeper.py
 Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
