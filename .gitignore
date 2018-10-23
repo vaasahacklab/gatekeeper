@@ -1,9 +1,10 @@
 config.json
-gatekeeper.log
 whitelist.json.local
 whitelist.json
 boot
 boot.1
 *.pyc
 venv/
-SPI-Py/
+__pycache__/
+logs/
+

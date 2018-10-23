@@ -1,28 +1,28 @@
 {
     "doorbell": [{
-            "name": "electronics",
+            "name": "Lounge",
             "url": "http://example.com:8080"
         },
         {
-            "name": "test2",
+            "name": "Livingroom",
             "url": "https://example.com"
         }
     ],
 
-    "url_log": [{
-            "name": "LogUrl1",
-            "api_key": "LongRandomKey",
-            "api_url": "https://example.com/gatekeeper/log/"
+    "urllog": [{
+            "name": "LoggerName",
+            "api_url": "https://example.com/SomePath/log/",
+            "api_key": "UsuallyNiceLongRandomString"
         }
     ],
 
     "mqtt": [{
-            "name": "MQTTlogger",
-            "host": "mqttlog.lan"
+            "name": "Mosquitto",
+            "host": "test.mosquitto.org"
         },
         {
-            "name": "Another interesting MQTT",
-            "host": "nxdomain.local"
+            "name": "OwnHost",
+            "host": "Ownhost.lan"
         }
     ],
 
