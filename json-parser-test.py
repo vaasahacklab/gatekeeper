@@ -19,19 +19,22 @@ log.debug("Loading config file...")
 try:
     with open(os.path.join(sys.path[0], "config.json"), "r") as f:
         config = json.load(f)
+        log.debug("Config file loaded.")
 except Exception as e:
     log.error("Failed loading config file: " + str(e))
     raise e
-log.debug("Config file loaded.")
 
 class JsonParserTest:
     def __init__(self, config):
-        log.info("Initialising JSON Parser Tester")
+        log.debug("Initialising JSON Parser Tester")
         self.mqtt = mqtt.mqtt()
         self.urllog = urllog.urllog()
 
     def start(self):
         log.info("Starting JsonParserTest")
+        self.mqtt.start(config)
+        self.urllog.start(config)
+
         data1 = "00000000"
         data2 = "JsonParserTest"
         data3 = "door/name"
