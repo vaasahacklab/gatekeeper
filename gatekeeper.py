@@ -239,10 +239,43 @@ class Pin:
     else:
       log.error("Opening lock: Else reached, dunno lol")
 #    print("after if")
-#    print("\nAfter unlock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
+      log.debug("Motor left: " + str(GPIO.input(motor_left_switch))
+        + " Motor right: " + str(GPIO.input(motor_right_switch)))
+
+      self.enable_motor_pwm.start(motor_pwm_dutycycle)
+
+      GPIO.output(lock_turn_right_pin, GPIO.LOW)
+      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+      timeout = time.time() + 3 # In case of mechanism malfunction stop motor trying indefinitely
+      timeouthappened = False
+
+      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        if time.time() > timeout:
+          log.error("HLock opening cycle timeout!")
+          timeouthappened = True
+          break
+
+      if timeouthappened:
+        #self.stop_motor()
+        #break
+
+        GPIO.output(lock_turn_right_pin, GPIO.HIGH)
+        GPIO.output(lock_turn_left_pin, GPIO.LOW)
+
+        timeout = time.time() + 3 # In case of mechanism malfunction stop motor trying indefinitely
+        timeouthappened = False
+
+        while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+          if time.time() > timeout:
+            log.error("HHLock opening cycle timeout!")
+            timeouthappened = True
+            self.stop_motor()
+            break
+        self.stop_motor()
+
+
+
 
 
   def lock_door(self):
