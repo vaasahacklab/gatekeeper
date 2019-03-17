@@ -3,30 +3,33 @@
 
 import logging
 import threading
-import json
 from time import sleep
 import paho.mqtt.client as paho
 
-__all__ = ["mqtt"]
+__all__ = ["Mqtt"]
 
-class mqtt:
+class Mqtt:
     def __init__(self):
-        self.log = logging.getLogger(__name__)
+        self.log = logging.getLogger(__name__.capitalize())
         self.server_list = []
+        self.thread_list = []
 
     def start(self, config):
         # Read MQTT-server settings from global config and store needed data in module-wide table
         for key, value in config.items():
-            if key == "mqtt":
+            if key.upper() == "MQTT":
                 for section in value:
                     self.server_list.append(section)
 
+    def stop(self):
+        for thread in self.thread_list:
+            thread.join()
+
     def send(self, topic, payload):
-        thread_list = []
         for server in self.server_list:
-            t = threading.Thread(name="mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, payload))
-            thread_list.append(t)
-        for thread in thread_list:
+            t = threading.Thread(name="Mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, payload))
+            self.thread_list.append(t)
+        for thread in self.thread_list:
             thread.start()
         
     def send_message(self, name, host, topic, payload):
@@ -43,6 +46,7 @@ class mqtt:
 if __name__ == "__main__":
     import os                   # To call external stuff
     import sys                  # System calls
+    import json                 # For parsing config file
 
     # Setup logging as we are standalone
     import logging.config
@@ -60,6 +64,8 @@ if __name__ == "__main__":
     log.debug("Config file loaded.")
 
     log.debug("Testing mqtt")
-    mqtt = mqtt()
-    mqtt.start(config)
-    mqtt.send("door/name", "MQTT testmessage")
+    Mqtt = Mqtt()
+    Mqtt.start(config)
+    Mqtt.send("door/name", "MQTT testmessage")
+    Mqtt.stop()
+
