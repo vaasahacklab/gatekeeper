@@ -210,6 +210,12 @@ class Pin:
     if GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch) == 0:
       log.debug("Lock motor already at leftmost position")
     elif GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch):
+#    elif GPIO.input(motor_right_switch):
+
+
+#      if GPIO.input(motor_left_switch) == 0:
+#        log.debug("Motor left: " + str(GPIO.input(motor_left_switch)))
+
       log.debug("Doorlock is locked, can open")
       log.info("Unlocking door")
       motor_left_switch_pin_count = 0
@@ -239,10 +245,43 @@ class Pin:
     else:
       log.error("Opening lock: Else reached, dunno lol")
 #    print("after if")
-#    print("\nAfter unlock function:"
-#      + "\nMotor left: " + str(GPIO.input(motor_left_switch))
-#      + "\nMotor right: " + str(GPIO.input(motor_right_switch))
-#      + "\n")
+      log.debug("Motor left: " + str(GPIO.input(motor_left_switch))
+        + " Motor right: " + str(GPIO.input(motor_right_switch)))
+
+      self.enable_motor_pwm.start(motor_pwm_dutycycle)
+
+      GPIO.output(lock_turn_right_pin, GPIO.LOW)
+      GPIO.output(lock_turn_left_pin, GPIO.HIGH)
+
+      timeout = time.time() + 3 # In case of mechanism malfunction stop motor trying indefinitely
+      timeouthappened = False
+
+      while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+        if time.time() > timeout:
+          log.error("HLock opening cycle timeout!")
+          timeouthappened = True
+          break
+
+      if timeouthappened:
+        #self.stop_motor()
+        #break
+
+        GPIO.output(lock_turn_right_pin, GPIO.HIGH)
+        GPIO.output(lock_turn_left_pin, GPIO.LOW)
+
+        timeout = time.time() + 3 # In case of mechanism malfunction stop motor trying indefinitely
+        timeouthappened = False
+
+        while not (GPIO.input(motor_left_switch) and GPIO.input(motor_right_switch)):
+          if time.time() > timeout:
+            log.error("HHLock opening cycle timeout!")
+            timeouthappened = True
+            self.stop_motor()
+            break
+        self.stop_motor()
+
+
+
 
 
   def lock_door(self):
