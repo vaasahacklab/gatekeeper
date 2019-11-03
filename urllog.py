@@ -3,21 +3,20 @@
 
 import logging
 import threading
-from time import sleep
-import paho.mqtt.client as paho
+import requests
 
-__all__ = ["Mqtt"]
+__all__ = ["Urllog"]
 
-class Mqtt:
+class Urllog:
     def __init__(self):
         self.log = logging.getLogger(__name__.capitalize())
         self.server_list = []
         self.thread_list = []
 
     def start(self, config):
-        # Read MQTT-server settings from global config and store needed data in module-wide table
+        # Read Matrix settings from global config and store needed data in module-wide table
         for key, value in config.items():
-            if key.upper() == "MQTT":
+            if key.upper() == "URLLOG":
                 for section in value:
                     self.server_list.append(section)
 
@@ -25,28 +24,29 @@ class Mqtt:
         for thread in self.thread_list:
             thread.join()
 
-    def send(self, topic, payload):
+    def send(self, message, number):
         for server in self.server_list:
-            t = threading.Thread(name="Mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, payload))
+            t = threading.Thread(name="Urllog-" + server['name'], target=self.send_message, args=(server['name'], server['url'], server['key'], message, number))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
         
-    def send_message(self, name, host, topic, payload):
-        client = paho.Client(name)
+    def send_message(self, name, url, key, message, number):
+        url = "https://" + url
+        data = {'key': key, 'phone': number, 'message': message}
+        self.log.debug(name + ": Sending Urllog message: \"" + str(data) + "\" to: " + url)
         try:
-            self.log.debug(name + ": Publishing: \"" + topic + "\", \"" + payload + "\" to host: " + host)
-            client.connect(host)
-            client.publish(topic, payload)
-            client.disconnect()
+            r = requests.post(url, data, timeout=(5, 15))
+            self.log.debug(name + ": Result: " + str(r))
         except Exception as e:
-            self.log.error(name + ": Failed to connect to: " + host + " got error:\n  " + str(e))
+            self.log.error(name + ": Failed to send message to: " + url + " got error:\n  " + str(e))
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
     import os                   # To call external stuff
     import sys                  # System calls
     import json                 # For parsing config file
+    import requests
 
     # Setup logging as we are standalone
     import logging.config
@@ -63,9 +63,8 @@ if __name__ == "__main__":
         raise e
     log.debug("Config file loaded.")
 
-    log.debug("Testing mqtt")
-    Mqtt = Mqtt()
-    Mqtt.start(config)
-    Mqtt.send("door/name", "MQTT testmessage")
-    Mqtt.stop()
-
+    log.debug("Testing urllog")
+    Urllog = Urllog()
+    Urllog.start(config)
+    Urllog.send(message="Urllog Testmessage", number="+358000000000")
+    Urllog.stop()

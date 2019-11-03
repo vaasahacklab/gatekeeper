@@ -3,7 +3,6 @@
 
 import logging
 import threading
-from time import sleep
 import paho.mqtt.client as paho
 
 __all__ = ["Mqtt"]
@@ -25,19 +24,20 @@ class Mqtt:
         for thread in self.thread_list:
             thread.join()
 
-    def send(self, topic, payload):
+    def send(self, topic, message):
         for server in self.server_list:
-            t = threading.Thread(name="Mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, payload))
+            t = threading.Thread(name="Mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, message))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
         
-    def send_message(self, name, host, topic, payload):
+    def send_message(self, name, host, topic, message):
         client = paho.Client(name)
         try:
-            self.log.debug(name + ": Publishing: \"" + topic + "\", \"" + payload + "\" to host: " + host)
+            self.log.debug(name + ": Publishing: \"" + topic + "\", \"" + message + "\" to host: " + host)
             client.connect(host)
-            client.publish(topic, payload)
+            r = client.publish(topic, message)
+            self.log.debug(name + ": Result: " + str(r))
             client.disconnect()
         except Exception as e:
             self.log.error(name + ": Failed to connect to: " + host + " got error:\n  " + str(e))
@@ -66,6 +66,6 @@ if __name__ == "__main__":
     log.debug("Testing mqtt")
     Mqtt = Mqtt()
     Mqtt.start(config)
-    Mqtt.send("door/name", "MQTT testmessage")
+    Mqtt.send(topic="door/name", message="MQTT testmessage")
     Mqtt.stop()
 

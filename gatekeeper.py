@@ -10,8 +10,9 @@ import sys                  # System calls
 import json                 # For parsing config file
 
 from time import sleep
-import mqtt
 import urllog
+import matrix
+import mqtt
 
 log = logging.getLogger("Gatekeeper")
 
@@ -28,32 +29,36 @@ except Exception as e:
 class Gatekeeper:
     def __init__(self, config):
         log.debug("Initialising Gatekeeper")
-        self.Modem = Modem.Modem()
-        self.Mqtt = mqtt.Mqtt()
+#        self.Modem = Modem.Modem()
         self.Urllog = urllog.Urllog()
+        self.Matrix = matrix.Matrix()
+        self.Mqtt = mqtt.Mqtt()
 
     def start_modules(self):
-        self.Modem.start(config)
-        self.Mqtt.start(config)
+#        self.Modem.start(config)
         self.Urllog.start(config)
+        self.Matrix.start(config)
+        self.Mqtt.start(config)
 
     def stop_modules(self):
-        self.Modem.stop()
-        self.Mqtt.stop()
+#        self.Modem.stop()
         self.Urllog.stop()
+        self.Matrix.stop()
+        self.Mqtt.stop()
 
     def start(self):
         log.info("Starting Gatekeeper")
         self.start_modules()
 
-        data1 = "00000000"
-        data2 = "Gatekeeper"
+        data1 = "Herra Pyyttoni"
+        data2 = "+358000000000"
         data3 = "door/name"
-        log.debug("Calling urllog with data1 as number: \"" + data1 + "\" and data2 as name: \"" + data2 + "\"")
-        self.Urllog.send(data1, data2)
-        log.debug("Calling mqtt with data3 as mqtt topic: \"" + data2 + "\" and data2 as name/payload: \"" + data2 + "\"")
-        self.Mqtt.send(data3, data2)
-
+        log.debug("Calling urllog with data1 as name: \"" + data1 + "\" and data2 as number: \"" + data2 + "\"")
+        self.Urllog.send(message=data1, number=data2)
+        log.debug("Calling matrix with data1 as name: \"" + data1 + "\" and data2 as number: \"" + data2 + "\"")
+        self.Matrix.send(message=data1, number=data2)
+        log.debug("Calling mqtt with data3 as mqtt topic: \"" + data2 + "\" and data1 as name/payload: \"" + data1 + "\"")
+        self.Mqtt.send(topic=data3, message=data1)
 
         self.stop()
 
