@@ -1,5 +1,7 @@
 {
-    "doorbell": [{
+    "doorbell":
+    [
+        {
             "name": "Lounge",
             "url": "http://example.com:8080"
         },
@@ -9,14 +11,18 @@
         }
     ],
 
-    "urllog": [{
+    "urllog":
+    [
+        {
             "name": "LoggerName",
             "api_url": "https://example.com/SomePath/log/",
             "api_key": "UsuallyNiceLongRandomString"
         }
     ],
 
-    "mqtt": [{
+    "mqtt":
+    [
+        {
             "name": "Mosquitto",
             "host": "test.mosquitto.org"
         },
@@ -26,8 +32,28 @@
         }
     ],
 
-    "whitelist": {
-        "ssh": {
+    "matrix":
+    [
+        {
+            "name": "GeneralChat",
+            "host": "matrix.example.com",
+            "room": "!VoidString18chars:example.com",
+            "token": "LongAssAccessToken",
+            "sendnumber": "False"
+        },
+        {
+            "name": "AdminChat",
+            "host": "matrix.example.com",
+            "room": "!AnotherStr18chars:example.com",
+            "token": "LongAssAccessToken",
+            "sendnumber": "True"
+        }
+    ],
+
+    "whitelist":
+    {
+        "ssh":
+        {
             "server": "whitelist.example.com",
             "port": 22,
             "username": "username",
@@ -37,7 +63,90 @@
         }
     },
 
-    "modem": {
+    "modem":
+    {
+        "port": "/dev/ttyAMA0",
+        "baudrate": 115200,
+        "parity": "serial.PARITY_ODD",
+        "stopbits": "serial.STOPBITS_ONE",
+        "bytesize": "serial.EIGHTBITS",
+        "xonxoff": "True",
+        "rtscts": "False",
+        "dsrdtr": "False",
+
+        "gpio": {
+            "power": 11,
+            "reset": 12
+        }
+    }
+}
+{
+    "doorbell":
+    [
+        {
+            "name": "Lounge",
+            "url": "http://example.com:8080"
+        },
+        {
+            "name": "Livingroom",
+            "url": "https://example.com"
+        }
+    ],
+
+    "urllog":
+    [
+        {
+            "name": "LoggerName",
+            "api_url": "https://example.com/SomePath/log/",
+            "api_key": "UsuallyNiceLongRandomString"
+        }
+    ],
+
+    "mqtt":
+    [
+        {
+            "name": "Mosquitto",
+            "host": "test.mosquitto.org"
+        },
+        {
+            "name": "OwnHost",
+            "host": "Ownhost.lan"
+        }
+    ],
+
+    "matrix":
+    [
+        {
+            "name": "GeneralChat",
+            "host": "matrix.example.com",
+            "room": "!VoidString18chars:example.com",
+            "token": "LongAssAccessToken",
+            "sendnumber": "False"
+        },
+        {
+            "name": "AdminChat",
+            "host": "matrix.example.com",
+            "room": "!AnotherStr18chars:example.com",
+            "token": "LongAssAccessToken",
+            "sendnumber": "True"
+        }
+    ],
+
+    "whitelist":
+    {
+        "ssh":
+        {
+            "server": "whitelist.example.com",
+            "port": 22,
+            "username": "username",
+            "password": "LongRamblyPasswordOrPasskeyForKeyFile",
+            "keyfile": "~/.ssh/whitelist",
+            "getfile": "/files/whitelist.json"
+        }
+    },
+
+    "modem":
+    {
         "port": "/dev/ttyAMA0",
         "baudrate": 115200,
         "parity": "serial.PARITY_ODD",
