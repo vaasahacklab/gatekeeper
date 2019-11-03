@@ -381,6 +381,16 @@ class GateKeeper:
     except:
       log.debug('failed url for remote log')
 
+  def matrix_message(self, name, number):
+    try:
+      url = config['MatrixHost'] + '_matrix/client/r0/rooms/' + config['MatrixRoom'] + '/send/m.room.message'
+      token = 'config['MatrixToken']'
+      msgtype = 'm.text'
+      message = 'Opened door for: ' + name
+      r = requests.post(url, headers={'Authorization': 'Bearer ' + token}, json={'msgtype': msgtype, 'body': message})
+    except:
+      log.debug('failed Matrix message operation')
+
   def mqtt_log(self, name, number):
     try:
       publish.single("door/name", name, hostname=config['MQTThost'])
@@ -515,29 +525,35 @@ class GateKeeper:
       # Setup threads
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.rfidwhitelist[tag_id],tag_id))
+      matrix_message = threading.Thread(target=self.matrix_message, args=(self.rfidwhitelist[tag_id],tag_id))
       mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.rfidwhitelist[tag_id],tag_id))
       # Execute letting people in -tasks
       lock_pulse.start()
       url_log.start()
+      matrix_message.start()
       mqtt_log.start()
       log.info("Opened the gate for RFID tag " + self.rfidwhitelist[tag_id] + " (" + tag_id + ").")
       # Wait tasks to finish
       lock_pulse.join()
       url_log.join()
+      matrix_message.join()
       mqtt_log.join()
     else:
       log.info("Did not open the gate for RFID tag "  + tag_id + ", tag UID is not kown.")
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",tag_id))
+      matrix_message = threading.Thread(target=self.matrix_message, args=("DENIED",tag_id))
       mqtt_log = threading.Thread(target=self.mqtt_log, args=("DENIED",tag_id))
       # Ring doorbell and log denied RFID tag
       dingdong.start()
       url_log.start()
+      matrix_message.start()
       mqtt_log.start()
       # Wait tasks to finish
       dingdong.join()
       url_log.join()
+      matrix_message.join()
       mqtt_log.join()
 
   def handle_call(self,number):
@@ -547,17 +563,20 @@ class GateKeeper:
       hangup = threading.Thread(target=self.modem.hangup, args=())
       lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
       url_log = threading.Thread(target=self.url_log, args=(self.whitelist[number],number))
+      matrix_message = threading.Thread(target=self.matrix_message, args=(self.whitelist[number],number))
       mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.whitelist[number],number))
       # Execute letting people in -tasks
       hangup.start()
       lock_pulse.start()
       url_log.start()
+      matrix_message.start()
       mqtt_log.start()
       log.info("Opened the gate for " + self.whitelist[number] + " (" + number + ").")
       # Wait tasks to finish
       hangup.join()
       lock_pulse.join()
       url_log.join()
+      matrix_message.join()
       mqtt_log.join()
     else:
       if number == "":
@@ -566,10 +585,12 @@ class GateKeeper:
       # Setup threads
       dingdong = threading.Thread(target=self.dingdong, args=())
       url_log = threading.Thread(target=self.url_log, args=("DENIED",number))
+      matrix_message = threading.Thread(target=self.matrix_message, args=("DENIED",number))
       mqtt_log = threading.Thread(target=self.mqtt_log, args=("DENIED",number))
       # Ring doorbell and log denied number
       dingdong.start()
       url_log.start()
+      matrix_message.start()
       mqtt_log.start()
       # Wait for caller hangup, so we log call only once instead on every ring, timeout 2 minutes
       data_channel = serial.Serial(port=data_port,baudrate=data_baudrate,parity=data_parity,stopbits=data_stopbits,bytesize=data_bytesize,xonxoff=data_xonxoff,rtscts=data_rtscts,dsrdtr=data_dsrdtr,timeout=1,writeTimeout=1)
@@ -584,6 +605,7 @@ class GateKeeper:
       # Wait doorbell and log precess to finish
       dingdong.join()
       url_log.join()
+      matrix_message.join()
       mqtt_log.join()
 
   def start(self):

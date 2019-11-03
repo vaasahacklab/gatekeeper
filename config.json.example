@@ -8,6 +8,8 @@
 	"whitelist_ssh_password": "",
 	"whitelist_ssh_keyfile": "",
 	"whitelist_ssh_getfile": "",
-	"MQTThost": ""
+	"MQTThost": "",
+	"MatrixHost": "",
+	"MatrixRoom": "",
+	"MatrixToken": ""
 }
-
