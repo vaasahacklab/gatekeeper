@@ -383,7 +383,7 @@ class GateKeeper:
 
   def matrix_message(self, name, number):
     try:
-      url = 'https://' + config['MatrixHost'] + '_matrix/client/r0/rooms/' + config['MatrixRoom'] + '/send/m.room.message'
+      url = 'https://' + config['MatrixHost'] + '/_matrix/client/r0/rooms/' + config['MatrixRoom'] + '/send/m.room.message'
       token = config['MatrixToken']
       msgtype = 'm.text'
       message = 'Opened door for: ' + name
