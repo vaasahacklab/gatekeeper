@@ -385,11 +385,12 @@ class GateKeeper:
     try:
       url = 'https://' + config['MatrixHost'] + '/_matrix/client/r0/rooms/' + config['MatrixRoom'] + '/send/m.room.message'
       token = config['MatrixToken']
-      msgtype = 'm.text'
+      msgtype = 'm.notice'
       message = 'Opened door for: ' + name
       r = requests.post(url, headers={'Authorization': 'Bearer ' + token}, json={'msgtype': msgtype, 'body': message})
+      log.debug('success: Matrix message send')
     except Exception as e:
-      log.debug('failed Matrix message operation, error:\n' + str(e) + '\n')
+      log.debug('failed Matrix message operation, error:\n' + str(e))
 
   def mqtt_log(self, name, number):
     try:
