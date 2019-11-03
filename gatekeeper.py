@@ -388,8 +388,8 @@ class GateKeeper:
       msgtype = 'm.text'
       message = 'Opened door for: ' + name
       r = requests.post(url, headers={'Authorization': 'Bearer ' + token}, json={'msgtype': msgtype, 'body': message})
-    except:
-      log.debug('failed Matrix message operation')
+    except Exception as e:
+      log.debug('failed Matrix message operation, error:\n' + str(e) + '\n')
 
   def mqtt_log(self, name, number):
     try:
