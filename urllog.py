@@ -8,17 +8,18 @@ import requests
 __all__ = ["Urllog"]
 
 class Urllog:
-    def __init__(self):
+    def __init__(self, config):
         self.log = logging.getLogger(__name__.capitalize())
         self.server_list = []
         self.thread_list = []
 
-    def start(self, config):
         # Read Matrix settings from global config and store needed data in module-wide table
         for key, value in config.items():
             if key.upper() == "URLLOG":
                 for section in value:
                     self.server_list.append(section)
+        if not self.server_list:
+            self.log.info("No " + __name__ + " config parameters found, nothing to do.")
 
     def stop(self):
         for thread in self.thread_list:
@@ -46,7 +47,6 @@ if __name__ == "__main__":
     import os
     import sys
     import json
-    import requests
 
     # Setup logging as we are standalone
     import logging.config
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     log.debug("Config file loaded.")
 
     log.info("Testing urllog sender")
-    Urllog = Urllog()
-    Urllog.start(config)
-    Urllog.send(message="Gatekeeper Urllog testmessage", number="+358000000000")
-    Urllog.stop()
+    Urllog = Urllog(config)
+    if Urllog.server_list:
+        Urllog.send(message="Gatekeeper Urllog testmessage", number="+358000000000")
+        Urllog.stop()

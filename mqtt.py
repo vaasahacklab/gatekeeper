@@ -8,17 +8,18 @@ import paho.mqtt.client as paho
 __all__ = ["Mqtt"]
 
 class Mqtt:
-    def __init__(self):
+    def __init__(self, config):
         self.log = logging.getLogger(__name__.capitalize())
         self.server_list = []
         self.thread_list = []
 
-    def start(self, config):
         # Read MQTT-server settings from global config and store needed data in module-wide table
         for key, value in config.items():
             if key.upper() == "MQTT":
                 for section in value:
                     self.server_list.append(section)
+        if not self.server_list:
+            self.log.info("No " + __name__ + " config parameters found, nothing to do.")
 
     def stop(self):
         for thread in self.thread_list:
@@ -64,8 +65,8 @@ if __name__ == "__main__":
     log.debug("Config file loaded.")
 
     log.info("Testing MQTT sender")
-    Mqtt = Mqtt()
-    Mqtt.start(config)
-    Mqtt.send(topic="door/name", message="MQTT Testmessage")
-    Mqtt.stop()
+    Mqtt = Mqtt(config)
+    if Mqtt.server_list:
+        Mqtt.send(topic="door/name", message="MQTT Testmessage")
+        Mqtt.stop()
 

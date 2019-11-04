@@ -30,15 +30,16 @@ class Gatekeeper:
     def __init__(self, config):
         log.debug("Initialising Gatekeeper")
 #        self.Modem = Modem.Modem()
-        self.Urllog = urllog.Urllog()
-        self.Matrix = matrix.Matrix()
-        self.Mqtt = mqtt.Mqtt()
+        self.Urllog = urllog.Urllog(config)
+        self.Matrix = matrix.Matrix(config)
+        self.Mqtt = mqtt.Mqtt(config)
 
     def start_modules(self):
+        pass
 #        self.Modem.start(config)
-        self.Urllog.start(config)
-        self.Matrix.start(config)
-        self.Mqtt.start(config)
+#        self.Urllog.start(config)
+#        self.Matrix.start(config)
+#        self.Mqtt.start(config)
 
     def stop_modules(self):
 #        self.Modem.stop()
