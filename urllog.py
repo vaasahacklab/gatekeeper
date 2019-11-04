@@ -26,15 +26,15 @@ class Urllog:
 
     def send(self, message, number):
         for server in self.server_list:
-            t = threading.Thread(name="Urllog-" + server['name'], target=self.send_message, args=(server['name'], server['url'], server['key'], message, number))
+            t = threading.Thread(name=__name__ + ": " + server['name'], target=self.send_message, args=(server['name'], server['url'], server['key'], message, number))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
         
     def send_message(self, name, url, key, message, number):
         url = "https://" + url
-        data = {'key': key, 'phone': number, 'message': message}
-        self.log.debug(name + ": Sending Urllog message: \"" + str(data) + "\" to: " + url)
+        data = {'key': key, 'number': number, 'message': message}
+        self.log.info(name + ": Sending number: \"" + str(number) + "\", message: \"" + str(message) + "\" to: " + url)
         try:
             r = requests.post(url, data, timeout=(5, 15))
             self.log.debug(name + ": Result: " + str(r))
@@ -43,9 +43,9 @@ class Urllog:
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
-    import os                   # To call external stuff
-    import sys                  # System calls
-    import json                 # For parsing config file
+    import os
+    import sys
+    import json
     import requests
 
     # Setup logging as we are standalone
@@ -63,8 +63,8 @@ if __name__ == "__main__":
         raise e
     log.debug("Config file loaded.")
 
-    log.debug("Testing urllog")
+    log.info("Testing urllog sender")
     Urllog = Urllog()
     Urllog.start(config)
-    Urllog.send(message="Urllog Testmessage", number="+358000000000")
+    Urllog.send(message="Gatekeeper Urllog testmessage", number="+358000000000")
     Urllog.stop()

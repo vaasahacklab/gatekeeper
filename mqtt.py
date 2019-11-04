@@ -26,7 +26,7 @@ class Mqtt:
 
     def send(self, topic, message):
         for server in self.server_list:
-            t = threading.Thread(name="Mqtt-" + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, message))
+            t = threading.Thread(name=__name__ + ": " + server['name'], target=self.send_message, args=(server['name'], server['host'], topic, message))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
@@ -34,7 +34,7 @@ class Mqtt:
     def send_message(self, name, host, topic, message):
         client = paho.Client(name)
         try:
-            self.log.debug(name + ": Publishing: \"" + topic + "\", \"" + message + "\" to host: " + host)
+            self.log.info(name + ": Publishing: \"" + topic + "\", \"" + message + "\" to host: " + host)
             client.connect(host)
             r = client.publish(topic, message)
             self.log.debug(name + ": Result: " + str(r))
@@ -44,9 +44,9 @@ class Mqtt:
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
-    import os                   # To call external stuff
-    import sys                  # System calls
-    import json                 # For parsing config file
+    import os
+    import sys
+    import json
 
     # Setup logging as we are standalone
     import logging.config
@@ -63,9 +63,9 @@ if __name__ == "__main__":
         raise e
     log.debug("Config file loaded.")
 
-    log.debug("Testing mqtt")
+    log.info("Testing MQTT sender")
     Mqtt = Mqtt()
     Mqtt.start(config)
-    Mqtt.send(topic="door/name", message="MQTT testmessage")
+    Mqtt.send(topic="door/name", message="MQTT Testmessage")
     Mqtt.stop()
 

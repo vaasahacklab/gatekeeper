@@ -26,7 +26,7 @@ class Matrix:
 
     def send(self, message, number):
         for server in self.server_list:
-            t = threading.Thread(name="Matrix-" + server['name'], target=self.send_message, args=(server['name'], server['host'], server['room'], server['token'], server['sendnumber'], message, number))
+            t = threading.Thread(name=__name__ + ": " + server['name'], target=self.send_message, args=(server['name'], server['host'], server['room'], server['token'], server['sendnumber'], message, number))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
@@ -36,7 +36,7 @@ class Matrix:
         msgtype = "m.notice"
         if sendnumber == True:
             message = message + ", number: " + number
-        self.log.debug(name + ": Sending Matrix message: \"" + message + "\" to room: " + room)
+        self.log.info(name + ": Sending Matrix message: \"" + message + "\" to room: " + room)
         try:
             r = requests.post(url, headers={'Authorization': 'Bearer ' + token}, json={'msgtype': msgtype, 'body': message}, timeout=(5, 15))
             self.log.debug(name + ": Result: " + str(r))
@@ -45,9 +45,9 @@ class Matrix:
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
-    import os                   # To call external stuff
-    import sys                  # System calls
-    import json                 # For parsing config file
+    import os
+    import sys
+    import json
     import requests
 
     # Setup logging as we are standalone
@@ -65,8 +65,8 @@ if __name__ == "__main__":
         raise e
     log.debug("Config file loaded.")
 
-    log.debug("Testing matrix")
+    log.info("Testing Matrix sender")
     Matrix = Matrix()
     Matrix.start(config)
-    Matrix.send(message="Matrix testmessage", number="+358000000000")
+    Matrix.send(message="Gatekeeper Matrix testmessage", number="+358000000000")
     Matrix.stop()
