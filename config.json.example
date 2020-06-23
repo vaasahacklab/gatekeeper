@@ -1,70 +1,61 @@
 {
-    "doorbell":
-    [
+    "doorbell": [
         {
-            "name": "Lounge",
-            "url": "http://example.com:8080"
+            "name": "Local speaker",
+            "url": "http://127.0.0.1:8080"
         },
         {
-            "name": "Livingroom",
-            "url": "https://example.com"
+            "name": "Remote dingdong",
+            "url": "https://hacklab.example.com:1234"
         }
     ],
-
-    "urllog":
-    [
+    "urllog": [
         {
             "name": "LoggerName",
-            "api_url": "https://example.com/SomePath/log/",
-            "api_key": "UsuallyNiceLongRandomString"
+            "api_url": "https://urllog.example.com/SomePath/log/",
+            "api_key": "NiceLongRandomString"
         }
     ],
-
-    "mqtt":
-    [
+    "mqtt": [
         {
             "name": "Mosquitto",
             "host": "test.mosquitto.org"
         },
         {
-            "name": "OwnHost",
+            "name": "Own Host",
             "host": "Ownhost.lan"
         }
     ],
-
-    "matrix":
-    [
-        {
-            "name": "GeneralChat",
-            "host": "matrix.example.com",
-            "room": "!VoidString18chars:example.com",
-            "token": "LongAssAccessToken",
-            "sendnumber": false
+    "matrix": {
+        "bot": {
+            "name": "Nice bot",
+            "mxid": "@botuser:example.com",
+            "password": "VerySecret",
+            "homeserver": "matrix.example.com",
+            "session_name": "Gatekeeper",
+            "session_id": "This fills automatically, do not touch!",
+            "accesstoken": "This fills automatically, do not touch!"
         },
-        {
-            "name": "AdminChat",
-            "host": "matrix.example.com",
-            "room": "!AnotherStr18chars:example.com",
-            "token": "LongAssAccessToken",
-            "sendnumber": true
-        }
-    ],
-
-    "whitelist":
-    {
-        "ssh":
-        {
-            "server": "whitelist.example.com",
-            "port": 22,
-            "username": "username",
-            "password": "LongRamblyPasswordOrPasskeyForKeyFile",
-            "keyfile": "~/.ssh/whitelist",
-            "getfile": "/files/whitelist.json"
-        }
+        "rooms": [
+            {
+                "name": "Public room",
+                "id": "!VoidString18chars:example.com",
+                "staffroom": false
+            },
+            {
+                "name": "Staff room",
+                "id": "!AnotherStr18chars:example.org",
+                "staffroom": true
+            }
+        ]
     },
-
-    "modem":
-    {
+    "mulysa": {
+        "name": "Friendly name"
+        "host": "https://mulysa-server.example.com",
+        "device_id": "DeviceIdMatchingInMulysa",
+        "accesstoken": "AccessTokenGeneratedInMulysa"
+    },
+    "modem": {
         "port": "/dev/ttyAMA0",
         "baudrate": 115200,
         "parity": "serial.PARITY_ODD",
@@ -73,7 +64,6 @@
         "xonxoff": true,
         "rtscts": false,
         "dsrdtr": false,
-
         "gpio": {
             "power": 11,
             "reset": 12

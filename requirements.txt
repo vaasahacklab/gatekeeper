@@ -1,5 +1,6 @@
 PySerial>=3.4
 RPi.GPIO>=0.7.0
-requests>=2.22.0
-paramiko>=2.6.0
+requests>=2.24.0
+paramiko>=2.7.1
 paho-mqtt>=1.5.0
+matrix-nio[e2e]>=0.14.0

@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import threading
 import requests
 
 __all__ = ["Urllog"]
@@ -13,7 +12,7 @@ class Urllog:
         self.server_list = []
         self.thread_list = []
 
-        # Read Matrix settings from global config and store needed data in module-wide table
+        # Read urllog settings from global config and build thread list per instance
         for key, value in config.items():
             if key.upper() == "URLLOG":
                 for section in value:
@@ -21,32 +20,34 @@ class Urllog:
         if not self.server_list:
             self.log.info("No " + __name__ + " config parameters found, nothing to do.")
 
-    def stop(self):
-        for thread in self.thread_list:
-            thread.join()
-
-    def send(self, message, number):
+    def send(self, nick, token):
         for server in self.server_list:
-            t = threading.Thread(name=__name__ + ": " + server['name'], target=self.send_message, args=(server['name'], server['url'], server['key'], message, number))
+            t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['api_url'], server['api_key'], nick, token))
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
+        for thread in self.thread_list:
+            thread.join()
         
-    def send_message(self, name, url, key, message, number):
-        url = "https://" + url
-        data = {'key': key, 'number': number, 'message': message}
-        self.log.info(name + ": Sending number: \"" + str(number) + "\", message: \"" + str(message) + "\" to: " + url)
+    def _send(self, name, url, key, nick, token):
+        content = {'key': key, 'nick': nick, 'token': token}
+        self.log.info(name + ": Sending token: \"" + str(token) + "\", nick: \"" + str(nick) +"\"")
         try:
-            r = requests.post(url, data, timeout=(5, 15))
-            self.log.debug(name + ": Result: " + str(r))
+            r = requests.post(url, data=content, timeout=(5, 15))
+            if r:
+                self.log.debug(name + ": HTTP responsecode: " + str(r.status_code))
+                self.log.info("Success")
+            else:
+                self.log.error(name + ": Failed to send message to: " + url + ", got HTTP status: " + str(r.status_code))
         except Exception as e:
-            self.log.error(name + ": Failed to send message to: " + url + " got error:\n  " + str(e))
+            self.log.error(name + ": Failed to send message to: " + url + " with error:\n  " + str(e))
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
     import os
     import sys
     import json
+    from threading import Thread
 
     # Setup logging as we are standalone
     import logging.config
@@ -54,17 +55,15 @@ if __name__ == "__main__":
     log = logging.getLogger(__name__)
 
     # Load config from file as we are standalone
-    log.debug("Loading config file...")
+    log.debug("Loading config file")
     try:
         with open(os.path.join(sys.path[0], "config.json"), "r") as f:
             config = json.load(f)
+        f.close()
     except Exception as e:
-        log.error("Failed loading config file: " + str(e))
+        log.critical("Failed loading config file: " + str(e))
         raise e
-    log.debug("Config file loaded.")
 
-    log.info("Testing urllog sender")
+    log.info("Running standalone, testing urllog sender")
     Urllog = Urllog(config)
-    if Urllog.server_list:
-        Urllog.send(message="Gatekeeper Urllog testmessage", number="+358000000000")
-        Urllog.stop()
+    Urllog.send(nick="Gatekeeper testmessage", token="+3580000")

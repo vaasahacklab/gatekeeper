@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import logging, logging.config
-logging.config.fileConfig("logging.ini")
-
 import os                   # To call external stuff
 import sys                  # System calls
 #import threading            # For enabling multitasking
@@ -12,75 +9,79 @@ from time import sleep
 import mqtt
 import urllog
 
-log = logging.getLogger("JsonParserTest")
-
 # Load configuration file
-log.debug("Loading config file...")
+print("Loading config file")
 try:
     with open(os.path.join(sys.path[0], "config.json"), "r") as f:
         config = json.load(f)
-        log.debug("Config file loaded.")
+    f.close()
 except Exception as e:
-    log.error("Failed loading config file: " + str(e))
+    print("Failed loading config file: " + str(e))
     raise e
 
 class JsonParserTest:
     def __init__(self, config):
-        log.debug("Initialising JSON Parser Tester")
-        self.mqtt = mqtt.mqtt()
-        self.urllog = urllog.urllog()
+        print("Initialising JSON Parser Tester")
 
     def start(self):
-        log.info("Starting JsonParserTest")
-        self.mqtt.start(config)
-        self.urllog.start(config)
+        print("config JSON-dump:\n\n")
+        print(json.dumps(config, indent=4, ensure_ascii=False) + "\n\n")
 
-        data1 = "00000000"
-        data2 = "JsonParserTest"
-        data3 = "door/name"
-        log.debug("Calling urllog with data1 as number: \"" + data1 + "\" and data2 as name: \"" + data2 + "\"")
-        self.urllog.send(data1, data2)
-        log.debug("Calling mqtt with data3 as mqtt topic: \"" + data2 + "\" and data2 as name/payload: \"" + data2 + "\"")
-        self.mqtt.send(data3, data2)
-        self.stop()
+        print("per key:\n\n")
+        for key in config:
+            print(key)
+        print("\n\n")
+
+        print("per key, value:\n\n")
+        for key, value in config.items():
+            print(" " + str(key) + str(value) + "\n")
+        print("\n\n")
+
+        print("key in matrix:\n\n")
+        for key in config['matrix']:
+            print(key)
+        print("\n\n")
+
+        print("key in matrix->bot:\n\n")
+        for key, value in config['matrix'].items():
+            if key.upper() == "BOT":
+                print(value)
+        print("\n\n")
+
+        print("matrix->bot, values:\n\n")
+        for key in config['matrix']['bot']:
+                print(key + ": " + config['matrix']['bot'][key])
+        print("\n\n")
+
+        print("if matrix->bot has default session_id value (starts with \"this\"), change it to \"success!\", in memory")
+        if config['matrix']['bot']['session_id'].upper().split()[0] == "THIS":
+            original=config['matrix']['bot']['session_id']
+            print("Before: " + config['matrix']['bot']['session_id'])
+            config['matrix']['bot']['session_id'] = "success!"
+            print("After: " + config['matrix']['bot']['session_id'])
+            config['matrix']['bot']['session_id'] = original
+            print("Back to original: " + config['matrix']['bot']['session_id'])
+        print("\n\n")
+
+        print("if matrix->bot has default access token value (starts with \"this\"), change it to \"success!\", into test file configtest.json")
+        if config['matrix']['bot']['accesstoken'].upper().split()[0] == "THIS":
+            config['matrix']['bot']['accesstoken'] = "success!"
+        print("Saving configtest.json")
+        with open(os.path.join(sys.path[0], "configtest.json"), "w") as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+        f.close()
+        print("\nLoad configtest.json and print:\n\n")
+        with open(os.path.join(sys.path[0], "configtest.json"), "r") as f:
+            testconfig = json.load(f)
+        f.close()
+        print(json.dumps(testconfig, indent=4, ensure_ascii=False) + "\n\n")
+        print("Deleting configtest.json")
+        os.remove(os.path.join(sys.path[0], "configtest.json"))
+        print("\n\n")
 
     def stop(self):
-        log.debug("doned")
+        print("stop")
 
 jsonparsertest = JsonParserTest(config)
 jsonparsertest.start()
-
-"""
-        print("print(\"config\"):\n")
-        print(" " + str(config) + "\n\n")
-
-        print("for key, value in config.items, print key, value:\n")
-        for key, value in config.items():
-            print(" " + str(key) + str(value) + "\n")
-
-        print("for mqttserver in config['mqtt']:\n")
-        for mqttserver in config['mqtt']:
-            print("print(mqttserver):\n")
-            print("", mqttserver, "\n")
-            print("print(mqttserver['name'] + \", \" + mqttserver['host'])" + "\n")
-            print(" " + mqttserver['name'] + ", " + mqttserver['host'] + "\n")
-
-        print("names\n")
-        for key, value in config.items():
-            for k in value:
-                print("", type(k))
-                if type(k) == dict:
-                    print(" is dict: ", k)
-                    print(" name:", k['name'], "\n")
-                if type(k) == str:
-                    print(" is str: ", k, "\n")
-
-        print("mqtt specifically\n")
-        for key, value in config.items():
-            if key == "mqtt":
-                for k in value:
-                    print(" key name:", key)
-                    print(" name:", k['name'])
-                    print(" host:", k['host'], "\n")
-
-"""
+jsonparsertest.stop()
