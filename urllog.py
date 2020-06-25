@@ -81,20 +81,21 @@ if __name__ == "__main__":
         log.critical("Failed loading config file, got error:\n\t" + str(e))
 
     Urllog = Urllog(config)
-    
+
     Urllog.send(nick="Gatekeeper testmessage", token="+3580000")
     Urllog.waitSendFinished()
 
     log.info("Results:")
     for server in Urllog.server_list:
-        if not Urllog.result[server['name']]:
+        result = Urllog.result[server['name']]
+        if not result:
             log.info(str(server['name']) + ": Other error, see error logs above")
-        elif Urllog.result[server['name']] == 200:
+        elif result == 200:
             log.info(str(server['name']) + ": Message sent successfully")
-        elif Urllog.result[server['name']] == 403:
+        elif result == 403:
             log.info(str(server['name']) + ": Error: 403 Forbidden, check api_key")
-        elif Urllog.result[server['name']] == 404:
+        elif result == 404:
             log.info(str(server['name']) + ": Error: 404 Not found, check api_url")
         else:
-            log.info(str(server['name']) + ": Error: Got unknown error code: \"" + str(Urllog.result[server['name']]) + "\"")
+            log.info(str(server['name']) + ": Error: Got unknown error code: \"" + str(result) + "\"")
     log.info("Testing finished")
