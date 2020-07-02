@@ -3,6 +3,7 @@
 
 import logging
 import requests
+from threading import Thread
 
 __all__ = ["Urllog"]
 
@@ -34,7 +35,7 @@ class Urllog:
         
     def _send(self, name, url, key, nick, token):
         self.result[name] = None
-        content = {'key': key, 'message': nick, 'number': token}
+        content = {'key': key, 'message': nick, 'phone': token}
         self.log.info(name + ": Sending token: \"" + str(token) + "\", nick: \"" + str(nick) +"\"")
         try:
             r = requests.post(url, data=content, timeout=(5, 15))
@@ -51,9 +52,8 @@ if __name__ == "__main__":
     import os
     import sys
     import json
-    from threading import Thread
 
-    __name__ = "urllog"
+    __name__ = "Urllog"
 
     # Setup logging to stdout
     import logging

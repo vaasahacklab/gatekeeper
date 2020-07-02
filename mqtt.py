@@ -3,6 +3,7 @@
 
 import logging
 import paho.mqtt.client as paho
+from threading import Thread
 
 __all__ = ["Mqtt"]
 
@@ -48,9 +49,8 @@ if __name__ == "__main__":
     import os
     import sys
     import json
-    from threading import Thread
 
-    __name__ = "mqtt"
+    __name__ = "Mqtt"
 
     # Setup logging to stdout
     import logging
@@ -78,6 +78,6 @@ if __name__ == "__main__":
         log.critical("Failed loading config file, got error:\n\t" + str(e))
 
     Mqtt = Mqtt(config)
-    
+
     Mqtt.send(topic="door/name", nick="Gatekeeper testmessage")
     Mqtt.waitSendFinished()

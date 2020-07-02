@@ -3,6 +3,7 @@
 
 import logging
 import requests
+from threading import Thread
 
 __all__ = ["Mulysa"]
 
@@ -76,7 +77,6 @@ if __name__ == "__main__":
     import os
     import sys
     import json
-    from threading import Thread
 
     commandLineArguments = len(sys.argv) - 1
 
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         print("If querytoken is omitted, an access list query is tested\n")
         quit()
 
-    __name__ = "mulysa"
+    __name__ = "Mulysa"
 
     # Setup logging to stdout
     import logging
