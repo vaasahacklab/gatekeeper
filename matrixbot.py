@@ -6,7 +6,13 @@ import requests
 import asyncio
 from queue import Queue 
 from threading import Thread
-from nio import AsyncClient, AsyncClientConfig, LoginResponse
+from nio import (
+    AsyncClient,
+    AsyncClientConfig,
+    LoginResponse,
+    MatrixRoom,
+    RoomMessageText,
+)
 from nio.store import SqliteStore
 
 __all__ = ["Matrixbot"]
@@ -48,13 +54,54 @@ class Matrixbot:
         for thread in self.thread_list:
             thread.start()
 
-    def _stop(self):
-        pass
-        #await client.close()
-
-    def send(self, message):
+    def stop(self):
         for queue in self.message:
-            queue.put(message)
+            queue.put(None)
+        for queue in self.message:
+            queue.join()
+        for thread in self.thread_list:
+            thread.join()
+
+    def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
+        for queue in self.message:
+            queue.put((result, querytype, token, email, firstName, lastName, nick, phone))
+
+    def generateMessage(self, staffroom, message):
+        result = message[0]
+        querytype = message[1]
+        token = message[2]
+        email = message[3]
+        firstName = message[4]
+        lastName = message[5]
+        nick = message[6]
+        phone = message[7]
+
+        if staffroom:
+            if 200 <= result <= 299:
+                message = ("Gatekeeper: door access granted with: \"" + querytype + "\", token: \"" + token + "\".\n"
+                        "Member data:\n"
+                        "\tFirst name: \"" + firstName + "\"\n"
+                        "\tLast name: \"" + lastName + "\"\n"
+                        "\tNick: \"" + nick + "\"\n"
+                        "\tEmail: \"" + email + "\"\n"
+                        "\tPhone: \"" + phone + "\"\n"
+                )
+            elif result == 480:
+                message = "Gatekeeper: door access denied with: \"" + querytype + "\", token: \"" + token + "\", no member exist with that token."
+            elif result == 481:
+                message = "Gatekeeper: door access denied with: \"" + querytype + "\", token: \"" + token + "\", member has no door access."
+            else:
+                message = None
+        else:
+            if 200 <= result <= 299:
+                message = "Gatekeeper: Opened door for: \"" + nick + "\"."
+            elif result == 480:
+                message = "Gatekeeper: Someone is knocking on the door"
+            elif result == 481:
+                message = "Gatekeeper: Member without door access knocked the door."
+            else:
+                message = None
+        return message
 
     def _start(self, name, mxid, password, homeserver, session_name, session_id, accesstoken, rooms, q):
         self.log.info(name + ": Logging in")
@@ -64,6 +111,12 @@ class Matrixbot:
         client = AsyncClient(homeserver=homeserver, user=mxid, store_path=os.path.join(sys.path[0], "matrixbot"), config=clientConf)
         loop.run_until_complete(self._start_(name, client, mxid, password, session_name, session_id, accesstoken, q))
 
+    async def message_callback(self, room: MatrixRoom, event: RoomMessageText) -> None:
+        print(
+            f"Message received in room {room.display_name}\n"
+            f"{room.user_name(event.sender)} | {event.body}"
+        )
+
     async def _start_(self, name, client, mxid, password, session_name, session_id, accesstoken, q):
         for key, value in config.items():
             if key == "matrixbot":
@@ -71,7 +124,7 @@ class Matrixbot:
                     if section['name'] == name:
                         try:
                             if not section['accesstoken'].upper().split()[0] == "THIS":
-                                self.log.debug(name + ": Trying restoring existing login")
+                                self.log.debug(name + ": Restoring existing login")
                                 client.restore_login(user_id=mxid, device_id=session_id, access_token=accesstoken)
                             elif section['accesstoken'].upper().split()[0] == "THIS":
                                 self.log.debug(name + ": Trying password login")
@@ -92,23 +145,49 @@ class Matrixbot:
                                     return
                         except Exception as e:
                             self.log.error(name + ": Unknown exeption:\n" + str(e))
+                            return
                         finally:
-                            while True:                            
+                            if client.should_upload_keys:
+                                try:
+                                    self.log.debug("Uploading E2E keys")
+                                    await client.keys_upload()
+                                except Exception as e:
+                                    self.log.error(name + ": Error uploading keys:\n\t" + str(e))
+                                    return
+                            
+                            try:
+                                self.log.debug(name + ": Syncing state")
+                                await client.sync(full_state=True, timeout=30000)
+                                client.add_event_callback(self.message_callback, RoomMessageText)
+                            except Exception as e:
+                                self.log.error(name + ": Error starting sync loop:\n\t" + str(e))
+                                return
+
+                            while True:          
                                 message = q.get()
+                                if message is None:
+                                    q.task_done()
+                                    break
+
                                 for room in section['rooms']:
+                                    parsedMessage = self.generateMessage(room['staffroom'], message)
                                     self.log.info(name + ": Sending message to room \"" + room['name'] + "\"")
                                     try:
                                         await client.room_send(
+                                            ignore_unverified_devices = True,
                                             room_id = room['id'],
                                             message_type="m.room.message",
                                             content = {
                                                 "msgtype": "m.notice",
-                                                "body": message
+                                                "body": parsedMessage
                                             }
                                         )
                                     except Exception as e:
-                                        log.error(name + ": Couldn't send message to room \"" + room['name'] + "\", got error:\n\t" + str(e))
-                                q.task_done()
+                                        self.log.error(name + ": Couldn't send message to room \"" + room['name'] + "\", got error:\n\t" + str(e))
+                                    finally:
+                                        q.task_done()
+
+                            await client.close()
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
@@ -145,6 +224,28 @@ if __name__ == "__main__":
 
     Matrixbot = Matrixbot(config)
     Matrixbot.start()
-    import time
-    time.sleep(3)
-    Matrixbot.send("täkkärää")
+
+    result = 200
+    querytype = "phone"
+    token = "+3580000"
+    email = "gatekeeper@example.com"
+    firstName = "Gatekeeper"
+    lastName = "Testuser"
+    nick = "Gatekeeper Test"
+    phone = "+3580000"
+
+    Matrixbot.send(result, querytype, token, email, firstName, lastName, nick, phone)
+
+#    result = 481
+#    querytype = "phone"
+#    token = "+3580001"
+#
+#    Matrixbot.send(result, querytype, token)
+#
+#    result = 480
+#    querytype = "phone"
+#    token = "+3580002"
+#
+#    Matrixbot.send(result, querytype, token)
+
+    Matrixbot.stop()

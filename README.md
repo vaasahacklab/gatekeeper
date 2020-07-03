@@ -3,6 +3,10 @@ Raspberry Pi + GSM Shield + python to control lock and environment
 
 Lock system for Vaasa Hacklab to let members in and doorbell for visitors
 
+New python 3 reconstrucion
+
+# !Under Construction! #
+
 # Physical #
 ## Stalli door locking mechanism wiring
 
