@@ -46,6 +46,7 @@ class Matrixbot:
             self.log.info("No \"" + __name__ + "\" config parameters found, nothing to do.")
 
     def start(self):
+        self.log.debug("Starting")
         for server in self.server_list:
             q = Queue()
             self.message.append(q)
@@ -53,14 +54,18 @@ class Matrixbot:
             self.thread_list.append(t)
         for thread in self.thread_list:
             thread.start()
+        self.log.debug("Started")
+
 
     def stop(self):
+        self.log.debug("Stopping")
         for queue in self.message:
             queue.put(None)
         for queue in self.message:
             queue.join()
         for thread in self.thread_list:
             thread.join()
+        self.log.debug("Stopped")
 
     def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
         for queue in self.message:
@@ -162,32 +167,34 @@ class Matrixbot:
                             except Exception as e:
                                 self.log.error(name + ": Error starting sync loop:\n\t" + str(e))
                                 return
+                            finally:
 
-                            while True:          
-                                message = q.get()
-                                if message is None:
-                                    q.task_done()
-                                    break
+                                while True:          
+                                    message = q.get()
+                                    if message is None:
+                                        q.task_done()
+                                        break
 
-                                for room in section['rooms']:
-                                    parsedMessage = self.generateMessage(room['staffroom'], message)
-                                    self.log.info(name + ": Sending message to room \"" + room['name'] + "\"")
                                     try:
-                                        await client.room_send(
-                                            ignore_unverified_devices = True,
-                                            room_id = room['id'],
-                                            message_type="m.room.message",
-                                            content = {
-                                                "msgtype": "m.notice",
-                                                "body": parsedMessage
-                                            }
-                                        )
-                                    except Exception as e:
-                                        self.log.error(name + ": Couldn't send message to room \"" + room['name'] + "\", got error:\n\t" + str(e))
+                                        for room in section['rooms']:
+                                            parsedMessage = self.generateMessage(room['staffroom'], message)
+                                            self.log.info(name + ": Sending message to room \"" + room['name'] + "\"")
+                                            try:
+                                                await client.room_send(
+                                                    ignore_unverified_devices = False,
+                                                    room_id = room['id'],
+                                                    message_type="m.room.message",
+                                                    content = {
+                                                        "msgtype": "m.notice",
+                                                        "body": parsedMessage
+                                                    }
+                                                )
+                                            except Exception as e:
+                                                    self.log.error(name + ": Couldn't send message to room \"" + room['name'] + "\", got error:\n\t" + str(e))
                                     finally:
                                         q.task_done()
 
-                            await client.close()
+                                await client.close()
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
@@ -234,18 +241,7 @@ if __name__ == "__main__":
     nick = "Gatekeeper Test"
     phone = "+3580000"
 
+    log.debug("Sending testdata")    
     Matrixbot.send(result, querytype, token, email, firstName, lastName, nick, phone)
-
-#    result = 481
-#    querytype = "phone"
-#    token = "+3580001"
-#
-#    Matrixbot.send(result, querytype, token)
-#
-#    result = 480
-#    querytype = "phone"
-#    token = "+3580002"
-#
-#    Matrixbot.send(result, querytype, token)
-
     Matrixbot.stop()
+    log.info("Test finished")

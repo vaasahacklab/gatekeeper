@@ -26,29 +26,29 @@
             "host": "Ownhost.lan"
         }
     ],
-    "matrix": {
-        "bot": {
-            "name": "Nice bot",
-            "mxid": "@botuser:example.com",
+    "matrixbot": [
+        {
+            "name": "Nice Bot",
+            "mxid": "@nicebot:example.com",
             "password": "VerySecret",
-            "homeserver": "matrix.example.com",
+            "homeserver": "https://matrix.example.com",
             "session_name": "Gatekeeper",
             "session_id": "This fills automatically, do not touch!",
-            "accesstoken": "This fills automatically, do not touch!"
-        },
-        "rooms": [
-            {
-                "name": "Public room",
-                "id": "!VoidString18chars:example.com",
-                "staffroom": false
-            },
-            {
-                "name": "Staff room",
-                "id": "!AnotherStr18chars:example.org",
-                "staffroom": true
-            }
-        ]
-    },
+            "accesstoken": "This fills automatically, do not touch!",
+            "rooms": [
+                {
+                    "name": "Public room",
+                    "id": "!RoomIdString:example.com",
+                    "staffroom": false
+                },
+                {
+                    "name": "Staff room",
+                    "id": "!AnotherIdString:example.com",
+                    "staffroom": true
+                }
+            ]
+        }
+    ],
     "mulysa": {
         "name": "Friendly name"
         "host": "https://mulysa-server.example.com",
