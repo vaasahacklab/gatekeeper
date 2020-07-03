@@ -50,7 +50,7 @@
         }
     ],
     "mulysa": {
-        "name": "Friendly name"
+        "name": "Friendly name",
         "host": "https://mulysa-server.example.com",
         "device_id": "DeviceIdMatchingInMulysa",
         "accesstoken": "AccessTokenGeneratedInMulysa"
