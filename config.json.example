@@ -13,17 +13,20 @@
         {
             "name": "LoggerName",
             "api_url": "https://urllog.example.com/SomePath/log/",
-            "api_key": "NiceLongRandomString"
+            "api_key": "NiceLongRandomString",
+            "staff": false
         }
     ],
     "mqtt": [
         {
-            "name": "Mosquitto",
-            "host": "test.mosquitto.org"
+            "name": "Public receiver",
+            "host": "mqtt.example.com",
+            "staff": false
         },
         {
-            "name": "Own Host",
-            "host": "Ownhost.lan"
+            "name": "Staff Host",
+            "host": "Ownhost.lan",
+            "staff": true
         }
     ],
     "matrixbot": [
@@ -39,12 +42,12 @@
                 {
                     "name": "Public room",
                     "id": "!RoomIdString:example.com",
-                    "staffroom": false
+                    "staff": false
                 },
                 {
                     "name": "Staff room",
                     "id": "!AnotherIdString:example.com",
-                    "staffroom": true
+                    "staff": true
                 }
             ]
         }

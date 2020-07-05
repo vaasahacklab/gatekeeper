@@ -9,9 +9,10 @@ import sys
 import json
 
 import mulysa
+import matrixbot
 import urllog
-#import matrix
 import mqtt
+import doorbell
 
 log = logging.getLogger("Gatekeeper")
 
@@ -32,38 +33,49 @@ class Gatekeeper:
         log.debug("Initialising Gatekeeper")
         self.Mulysa = mulysa.Mulysa(config)
         #self.Modem = Modem.Modem()
+        self.Matrixbot = matrixbot.Matrixbot(config)
         self.Urllog = urllog.Urllog(config)
-        #self.Matrix = matrix.Matrix(config)
         self.Mqtt = mqtt.Mqtt(config)
+        self.Doorbell = doorbell.Doorbell(config)
 
     def startModules(self):
-        pass
         #self.Modem.start(config)
-        #self.Matris.start(config)
+        self.Matrixbot.start()
+        self.Urllog.start()
+        self.Mqtt.start()
+        self.Doorbell.start()
 
     def stopModules(self):
-    	pass
         #self.Modem.stop()
-        #self.Matrix.stop()
+        self.Matrixbot.stop()
+        self.Urllog.stop()
+        self.Mqtt.stop()
+        self.Doorbell.stop()
 
     def sendData(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
         if 200 <= result <= 299:
-            self.Mqtt.send("door/name", nick)
-            self.Urllog.send(nick, token)
+            self.Matrixbot.send(result, querytype, token, email, firstName, lastName, nick, phone)
+            self.Urllog.send(result, querytype, token, email, firstName, lastName, nick, phone)
+            self.Mqtt.send(result, querytype, token, email, firstName, lastName, nick, phone)
+            self.Doorbell.send(result, querytype, token, email, firstName, lastName, nick, phone)
         elif result == 480:
-            self.Mqtt.send("door/name", "DENIED")
-            self.Urllog.send("DENIED", token)
+            self.Matrixbot.send(result, querytype, token)
+            self.Urllog.send(result, querytype, token)
+            self.Mqtt.send(result, querytype, token)
+            self.Doorbell.send(result, querytype, token)
         elif result == 481:
-            self.Mqtt.send("door/name", "DENIED")
-            self.Urllog.send("DENIED", token)
+            self.Matrixbot.send(result, querytype, token)
+            self.Urllog.send(result, querytype, token)
+            self.Mqtt.send(result, querytype, token)
+            self.Doorbell.send(result, querytype, token)
 
     def waitDataSendFinished(self):
         self.Mqtt.waitSendFinished()
         self.Urllog.waitSendFinished()
+        self.Doorbell.waitSendFinished()
 
     def queryToken(self, querytype, token):
         self.Mulysa.query(querytype, token)
-        self.Mulysa.waitQueryFinished()
 
     def handleResults(self, querytype, token):
         for server in self.Mulysa.server_list:
@@ -103,8 +115,9 @@ class Gatekeeper:
 
     def start(self):
         log.info("Starting Gatekeeper")
+        self.startModules()
         tokentype = "phone"
-        tokenitself = "+3580002"
+        tokenitself = "+3580001"
         self.queryToken(tokentype, tokenitself)
         self.handleResults(tokentype, tokenitself)
 

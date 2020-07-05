@@ -3,6 +3,9 @@
 
 import logging
 import requests
+import os
+import sys
+import json
 import asyncio
 from queue import Queue 
 from threading import Thread
@@ -19,6 +22,7 @@ __all__ = ["Matrixbot"]
 
 class Matrixbot:
     def __init__(self, config):
+        self.config = config
         self.log = logging.getLogger(__name__.capitalize())
         self.server_list = []
         self.thread_list = []
@@ -26,12 +30,12 @@ class Matrixbot:
         self.message = []
 
         # Read Matrix settings from global config and store needed data in module-wide tables
-        for key, value in config.items():
-            if key == "matrixbot":
-                if not os.path.exists(os.path.join(sys.path[0], "matrixbot")):
+        for key, value in self.config.items():
+            if key.upper() == __name__.upper():
+                if not os.path.exists(os.path.join(sys.path[0], __name__)):
                     self.log.debug("Session store folder for doesn't exist, creating it.")
                     try: 
-                        os.mkdir(os.path.join(sys.path[0], "matrixbot"), mode=0o700)
+                        os.mkdir(os.path.join(sys.path[0], __name__), mode=0o700)
                     except OSError as e: 
                         log.critical("Could not create session store folder, got error:\n" + e)
                         quit()
@@ -46,32 +50,33 @@ class Matrixbot:
             self.log.info("No \"" + __name__ + "\" config parameters found, nothing to do.")
 
     def start(self):
-        self.log.debug("Starting")
-        for server in self.server_list:
-            q = Queue()
-            self.message.append(q)
-            t = Thread(name=__name__ + ": " + server['name'], target=self._start, args=(server['name'], server['mxid'], server['password'], server['homeserver'], server['session_name'], server['session_id'], server['accesstoken'], server['rooms'], q))
-            self.thread_list.append(t)
-        for thread in self.thread_list:
-            thread.start()
-        self.log.debug("Started")
-
+        if self.server_list:
+            self.log.debug("Starting")
+            for server in self.server_list:
+                q = Queue()
+                self.message.append(q)
+                t = Thread(name=__name__ + ": " + server['name'], target=self._start, args=(server['name'], server['mxid'], server['password'], server['homeserver'], server['session_name'], server['session_id'], server['accesstoken'], server['rooms'], q))
+                self.thread_list.append(t)
+            for thread in self.thread_list:
+                thread.start()
+            self.log.debug("Started")
 
     def stop(self):
-        self.log.debug("Stopping")
-        for queue in self.message:
-            queue.put(None)
-        for queue in self.message:
-            queue.join()
-        for thread in self.thread_list:
-            thread.join()
-        self.log.debug("Stopped")
+        if self.server_list:
+            self.log.debug("Stopping")
+            for queue in self.message:
+                queue.put(None)
+            for queue in self.message:
+                queue.join()
+            for thread in self.thread_list:
+                thread.join()
+            self.log.debug("Stopped")
 
     def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
         for queue in self.message:
             queue.put((result, querytype, token, email, firstName, lastName, nick, phone))
 
-    def generateMessage(self, staffroom, message):
+    def generateMessage(self, staff, message):
         result = message[0]
         querytype = message[1]
         token = message[2]
@@ -81,7 +86,7 @@ class Matrixbot:
         nick = message[6]
         phone = message[7]
 
-        if staffroom:
+        if staff:
             if 200 <= result <= 299:
                 message = ("Gatekeeper: door access granted with: \"" + querytype + "\", token: \"" + token + "\".\n"
                         "Member data:\n"
@@ -123,7 +128,7 @@ class Matrixbot:
         )
 
     async def _start_(self, name, client, mxid, password, session_name, session_id, accesstoken, q):
-        for key, value in config.items():
+        for key, value in self.config.items():
             if key == "matrixbot":
                 for section in value:
                     if section['name'] == name:
@@ -142,7 +147,7 @@ class Matrixbot:
                                     section['session_id'] = client.device_id
                                     section['accesstoken'] = client.access_token
                                     with open(os.path.join(sys.path[0], "config.json"), "w") as f:
-                                        json.dump(config, f, indent=4, ensure_ascii=False)
+                                        json.dump(self.config, f, indent=4, ensure_ascii=False)
                                     f.close()
                                 else:
                                     self.log.debug(name + ": Failed to log in: " + str(resp))
@@ -177,7 +182,7 @@ class Matrixbot:
 
                                     try:
                                         for room in section['rooms']:
-                                            parsedMessage = self.generateMessage(room['staffroom'], message)
+                                            parsedMessage = self.generateMessage(room['staff'], message)
                                             self.log.info(name + ": Sending message to room \"" + room['name'] + "\"")
                                             try:
                                                 await client.room_send(
@@ -215,7 +220,7 @@ if __name__ == "__main__":
     )
     log = logging.getLogger(__name__)
 
-    log.info("Running standalone, testing matrix sender")
+    log.info("Running standalone, testing " + __name__ + " sender")
 
     # Load config from file
     log.debug("Loading config file")

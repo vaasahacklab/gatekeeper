@@ -18,7 +18,7 @@ class Mulysa:
 
         # Read Mulysa settings from global config and build thread list per instance
         for key, value in config.items():
-            if key.upper() == "MULYSA":
+            if key.upper() == __name__.upper():
                 self.server_list.append(value)
         if not self.server_list:
             self.log.warning("No " + __name__ + " config parameters found, nothing to do.")
@@ -29,6 +29,7 @@ class Mulysa:
             self.query_list.append(t)
         for thread in self.query_list:
             thread.start()
+        self.waitQueryFinished()
 
     def waitQueryFinished(self):
         for thread in self.query_list:
@@ -45,7 +46,7 @@ class Mulysa:
             if r.status_code == requests.codes.ok:
                 self.queryResult[name] = [r.status_code, r.text]
             else:
-                self.queryResult[name] = [r.status_code]
+                self.queryResult[name] = [r.status_code, r.text]
         except Exception as e:
             self.log.error("Query failed to " + str(url) + " with error:\n" + str(e))
 
@@ -104,9 +105,9 @@ if __name__ == "__main__":
     log = logging.getLogger(__name__)
 
     if commandLineArguments == 2:
-        log.info("Running standalone, testing Mulysa live query")
+        log.info("Running standalone, testing " + __name__ + " live query")
     if commandLineArguments == 1:
-        log.info("Running standalone, testing Mulysa access list query")
+        log.info("Running standalone, testing " + __name__ + " access list query")
 
     log.debug("Loading config file")
     try:

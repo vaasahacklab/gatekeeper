@@ -15,34 +15,69 @@ class Mqtt:
 
         # Read MQTT settings from global config and build thread list per instance
         for key, value in config.items():
-            if key.upper() == "MQTT":
+            if key.upper() == __name__.upper():
                 for section in value:
                     self.server_list.append(section)
         if not self.server_list:
             self.log.info("No \"" + __name__ + "\" config parameters found, nothing to do.")
 
-    def send(self, topic, nick):
-        for server in self.server_list:
-            t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['host'], topic, nick))
-            self.thread_list.append(t)
-        for thread in self.thread_list:
-            thread.start()
+    def start(self):
+        if self.server_list:
+            self.log.debug("Starting")
+            self.log.debug("Started")
+
+    def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
+        if self.server_list:
+            for server in self.server_list:
+                self.log.info(server['name'] + ": Sending data")
+                if server['staff']:
+                    if 200 <= result <= 299:
+                        data = {'querytype': querytype, 'token': token, 'email': email, 'firstName': firstName, 'lastName': lastName, 'nick': nick, 'phone': phone}
+                    elif result == 480:
+                        data = {'querytype': querytype, 'token': token, 'nick': "DENIED"}
+                    elif result == 481:
+                        data = {'querytype': querytype, 'token': token, 'nick': "DENIED"}
+                    else:
+                        data = None
+                else:
+                    if 200 <= result <= 299:
+                        data = {'nick': nick}
+                    elif result == 480:
+                        data = {'nick': "DENIED"}
+                    elif result == 481:
+                        data = {'nick': "DENIED"}
+                    else:
+                        data = None
+            if data:
+                for key in data:
+                    topic = "Gatekeeper/door/" + str(key)
+                    message = str(data[key])
+                    t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['host'], topic, message))
+                    self.thread_list.append(t)
+                for thread in self.thread_list:
+                    thread.start()
 
     def waitSendFinished(self):
         for thread in self.thread_list:
             thread.join()
 
-    def _send(self, name, host, topic, nick):
+    def stop(self):
+        if self.server_list:
+            self.log.debug("Stopping")
+            self.waitSendFinished()
+            self.log.debug("Stopping")
+
+    def _send(self, name, host, topic, message):
         client = paho.Client(name)
         try:
-            self.log.info(name + ": Publishing: \"" + topic + "\", \"" + nick + "\"")
+            self.log.debug(name + ": Publishing: \"" + topic + "\", \"" + message + "\"")
             client.connect(host)
-            r = client.publish(topic, nick)
+            r = client.publish(topic, message)
             self.log.debug(name + ": Result: " + str(r))
             if r:
                 client.disconnect()
         except Exception as e:
-            self.log.error(name + ": Failed to connect to: " + host + " got error:\n  " + str(e))
+            self.log.error(name + ": Failed to publish message to: " + host + " got error:\n\t" + str(e))
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
@@ -63,7 +98,7 @@ if __name__ == "__main__":
     )
     log = logging.getLogger(__name__)
 
-    log.info("Running standalone, testing MQTT sender")
+    log.info("Running standalone, testing " + __name__ + " sender")
 
     # Load config from file
     log.debug("Loading config file")
@@ -79,5 +114,16 @@ if __name__ == "__main__":
 
     Mqtt = Mqtt(config)
 
-    Mqtt.send(topic="door/name", nick="Gatekeeper testmessage")
-    Mqtt.waitSendFinished()
+    result = 200
+    querytype = "phone"
+    token = "+3580000"
+    email = "gatekeeper@example.com"
+    firstName = "Gatekeeper"
+    lastName = "Testuser"
+    nick = "Gatekeeper Test"
+    phone = "+3580000"
+
+    Mqtt.send(result, querytype, token, email, firstName, lastName, nick, phone)
+    Mqtt.stop()
+    
+    log.info("Testing finished")
