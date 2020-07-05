@@ -69,8 +69,13 @@ class Urllog:
         
     def _send(self, name, url, api_key, token, message):
         headers = {'Authorization': 'Bearer ' + api_key}
-        content = {'token': token, 'message': message}
-        self.log.debug(name + ": Sending token: \"" + str(token) + "\", message: \"" + str(message) +"\"")
+        if token:
+            self.log.debug(name + ": Sending token: \"" + str(token) + "\", message: \"" + str(message) +"\"")
+            content = {'token': token, 'message': message}
+        else:
+            self.log.debug(name + ": Sending message: \"" + str(message) +"\"")
+            content = {'message': message}
+
         try:
             r = requests.post(url, headers=headers, data=content, timeout=(5, 15))
             if r.status_code == 200:
