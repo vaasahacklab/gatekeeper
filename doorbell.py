@@ -29,20 +29,20 @@ class Doorbell:
     def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
         if self.server_list:
             for server in self.server_list:
-                self.log.info(server['name'] + ": Sending data")
                 if 200 <= result <= 299:
-                    success = True
+                    dooropened = True
                 elif result == 480:
-                    success = False
+                    dooropened = False
                 elif result == 481:
-                    success = False
+                    dooropened = False
                 else:
-                    success = None
-            if success is not None:
-                t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['url'], success))
-                self.thread_list.append(t)
-                for thread in self.thread_list:
-                    thread.start()
+                    dooropened = None
+                if dooropened is not None:
+                    self.log.info(server['name'] + ": Sending data")
+                    t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['url'], dooropened))
+                    self.thread_list.append(t)
+            for thread in self.thread_list:
+                thread.start()
 
     def stop(self):
         if self.server_list:
@@ -54,12 +54,13 @@ class Doorbell:
         for thread in self.thread_list:
             thread.join()
         
-    def _send(self, name, url, success):
+    def _send(self, name, url, dooropened):
 #        headers = {'Authorization': 'Bearer ' + api_key}
-#        content = {'token': token, 'message': message}
-        self.log.debug(name + ": Sending dindong with success: \"" + str(success) + "\", to url: \"" + str(url) +"\"")
+        content = {'dooropened': dooropened}
+        print(str(url), str(dooropened), str(content))
+        self.log.debug(name + ": Sending dindong with dooropened: \"" + str(dooropened) + "\", to url: \"" + str(url) +"\"")
         try:
-            r = requests.put(url, data=success, timeout=(5, 15))
+            r = requests.put(url, json=content, timeout=(5, 15))
             if r.status_code == 200:
                 self.log.debug(name + ": Dingdong sent successfully")
             elif r.status_code == 404:
