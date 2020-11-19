@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import logging, logging.config
 logging.config.fileConfig("logging.ini")
-
-import os
-import sys
-import json
-
-import mulysa
-import matrixbot
-import urllog
-import mqtt
-import doorbell
-
 log = logging.getLogger("Gatekeeper")
+import os                   # To call external stuff
+import sys                  # System calls
+#import threading            # For enabling multitasking
+import json                 # JSON parser, for config file
+import importlib
 
 # Load config from file
 log.debug("Loading config file")
@@ -23,110 +16,151 @@ try:
         config = json.load(f)
     f.close()
 except ValueError as e:
-    log.critical("config.json is malformed, got error:\n\t" + str(e))
     f.close()
+    log.critical("config.json is malformed, got error:\n\t" + str(e))
+    raise e
 except Exception as e:
     log.critical("Failed loading config file, got error:\n\t" + str(e))
+    raise e
+
+class Trigger:
+    def __init__(self, config):
+        log.debug("Initializing trigger modules")
+        self.available_modules = []
+        self.usable_modules = []
+        for key in config['trigger']:
+            modulename = key.lower()
+            log.info("Importing trigger module: \"" + modulename + "\"")
+            try:
+                module = importlib.import_module(modulename)
+                self.available_modules.append(module)
+            except Exception as e:
+                log.warning("Failed to import trigger module \"" + modulename + "\", got error:\n\t" + str(e))
+        for item in self.available_modules:
+            configlist = []
+            for key in config['trigger'][item.__name__]:
+                configlist.append(key)
+            try:
+                self.usable_modules.append(item.Gatekeeper(configlist))
+            except Exception as e:
+                log.warning("Failed to load trigger module: \"" + module.__name__ + "\", error:\n\t" + str(e))
+        if not self.usable_modules:
+            error = "Need at least one trigger module!"
+            log.critical(error)
+            #raise ImportError(error)
+
+class Query:
+    def __init__(self, config):
+        log.debug("Initializing query modules")
+        self.available_modules = []
+        self.usable_modules = []
+        for key in config['query']:
+            modulename = key.lower()
+            log.info("Importing query module: \"" + modulename + "\"")
+            try:
+                module = importlib.import_module(modulename)
+                self.available_modules.append(module)
+            except Exception as e:
+                log.warning("Failed to import query module \"" + modulename + "\", got error:\n\t" + str(e))
+        for item in self.available_modules:
+            configlist = []
+            for key in config['query'][item.__name__]:
+                configlist.append(key)
+            try:
+                self.usable_modules.append(item.Gatekeeper(configlist))
+            except Exception as e:
+                log.warning("Failed to load query module: \"" + module.__name__ + "\", error:\n\t" + str(e))
+        if not self.usable_modules:
+            error = "Need at least one query module!"
+            log.critical(error)
+            #raise ImportError(error)
+
+class Action:
+    def __init__(self, config):
+        log.debug("Initializing action modules")
+        self.available_modules = []
+        self.usable_modules = []
+        for key in config['action']:
+            modulename = key.lower()
+            log.info("Importing action module: \"" + modulename + "\"")
+            try:
+                sys.path.insert(1, os.path.join(sys.path[0], "modules", "action"))
+                module = importlib.import_module(modulename)
+                self.available_modules.append(module)
+            except Exception as e:
+                log.warning("Failed to import action module \"" + modulename + "\", got error:\n\t" + str(e))
+        for item in self.available_modules:
+            configlist = []
+            for key in config['action'][item.__name__]:
+                configlist.append(key)
+            try:
+                self.usable_modules.append(item.Gatekeeper(configlist))
+            except Exception as e:
+                log.warning("Failed to load action module: \"" + module.__name__ + "\", error:\n\t" + str(e))
+        if not self.usable_modules:
+            error = "Need at least one action module!"
+            log.critical(error)
+            #raise ImportError(error)
+
+class Remotelogger:
+    def __init__(self, config):
+        log.debug("Initializing Remotelogger modules")
+        self.available_modules = []
+        self.usable_modules = []
+        for key in config['remotelogger']:
+            modulename = key.lower()
+            log.info("Importing Remotelogger module: \"" + modulename + "\"")
+            sys.path.insert(1, os.path.join(sys.path[0], "modules", "a"))
+            try:
+                module = importlib.import_module(modulename)
+                self.available_modules.append(module)
+            except Exception as e:
+                log.warning("Failed to import Remotelogger module \"" + modulename + "\", got error:\n\t" + str(e))
+        for item in self.available_modules:
+            configlist = []
+            for key in config['remotelogger'][item.__name__]:
+                configlist.append(key)
+            try:
+                getmodule = item.Gatekeeper(configlist)
+                self.usable_modules.append(getmodule)
+            except Exception as e:
+                log.warning("Failed to load Remotelogger module: \"" + module.__name__ + "\", error:\n\t" + str(e))
+        if not self.usable_modules:
+            log.warning("No working Remotelogger modules!")
 
 class Gatekeeper:
     def __init__(self, config):
-        log.debug("Initialising Gatekeeper")
-        self.Mulysa = mulysa.Mulysa(config)
-        #self.Modem = Modem.Modem()
-        self.Matrixbot = matrixbot.Matrixbot(config)
-        self.Urllog = urllog.Urllog(config)
-        self.Mqtt = mqtt.Mqtt(config)
-        self.Doorbell = doorbell.Doorbell(config)
+        log.debug("Initializing Gatekeeper")
+        # Add module folders into python path, so module importer can find them
+        sys.path.append(os.path.join(sys.path[0], "modules", "trigger"))
+        sys.path.append(os.path.join(sys.path[0], "modules", "query"))
+        sys.path.append(os.path.join(sys.path[0], "modules", "action"))
+        sys.path.append(os.path.join(sys.path[0], "modules", "remotelogger"))
+        self.trigger = Trigger(config)
+        self.query = Query(config)
+        self.action = Action(config)        
+        self.remotelogger = Remotelogger(config)
 
-    def startModules(self):
-        #self.Modem.start(config)
-        self.Matrixbot.start()
-        self.Urllog.start()
-        self.Mqtt.start()
-        self.Doorbell.start()
-
-    def stopModules(self):
-        #self.Modem.stop()
-        self.Matrixbot.stop()
-        self.Urllog.stop()
-        self.Mqtt.stop()
-        self.Doorbell.stop()
-
-    def sendData(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
-        if 200 <= result <= 299:
-            self.Matrixbot.send(result, querytype, token, email, firstName, lastName, nick, phone)
-            self.Urllog.send(result, querytype, token, email, firstName, lastName, nick, phone)
-            self.Mqtt.send(result, querytype, token, email, firstName, lastName, nick, phone)
-            self.Doorbell.send(result, querytype, token, email, firstName, lastName, nick, phone)
-        elif result == 480:
-            self.Matrixbot.send(result, querytype, token)
-            self.Urllog.send(result, querytype, token)
-            self.Mqtt.send(result, querytype, token)
-            self.Doorbell.send(result, querytype, token)
-        elif result == 481:
-            self.Matrixbot.send(result, querytype, token)
-            self.Urllog.send(result, querytype, token)
-            self.Mqtt.send(result, querytype, token)
-            self.Doorbell.send(result, querytype, token)
-
-    def waitDataSendFinished(self):
-        self.Mqtt.waitSendFinished()
-        self.Urllog.waitSendFinished()
-        self.Doorbell.waitSendFinished()
-
-    def queryToken(self, querytype, token):
-        self.Mulysa.query(querytype, token)
-
-    def handleResults(self, querytype, token):
-        for server in self.Mulysa.server_list:
-            result = self.Mulysa.queryResult[server['name']]
-            log.debug("Query response: " + str(result))
-            if not result:
-                log.error("Did not get response from \"" + str(server['name']) + "\"")
-            elif 200 <= result[0] <= 299:
-                log.info("Successful response from \"" + str(server['name']) + "\"")
-                data = json.loads(result[1])
-                log.debug("Email: " + str(data['email']))
-                log.debug("First Name: " + str(data['first_name']))
-                log.debug("Last Name: " + str(data['last_name']))
-                log.debug("Nick: " + str(data['nick']))
-                log.debug("Phone: " + str(data['phone']))
-
-                if not data['nick']:
-                    data['nick'] = str(data['first_name'][0] + "." + data['last_name'][0] + ".")
-
-                # Do open door here
-                self.sendData(result[0], querytype, token, str(data['email']), str(data['first_name']), str(data['last_name']), str(data['nick']), str(data['phone']))
-                # Wait door to finish here
-                self.waitDataSendFinished()
-
-            elif result[0] == 480:
-                log.info("No \"" + str(querytype) + "\" token of \"" + str(token) + "\" exist on \"" + str(server['name']) + "\"")
-                self.sendData(result[0], querytype, token)
-                self.waitDataSendFinished()
-            elif result[0] == 481:
-                log.info("\"" + str(token) + "\" token exist on \"" + str(server['name']) + "\", but member has no door access")
-                self.sendData(result[0], querytype, token)
-                self.waitDataSendFinished()
-            elif result[0] == 404:
-                log.error("Device_id \"" + str(server['device_id']) + "\" or token type \"" + str(token) + "\" is invalid")
-            else:
-                log.error("Unknown error, HTTP code: " + str(result[0]) + ", possible response message:\n\t" + str(result[1]))
 
     def start(self):
-        log.info("Starting Gatekeeper")
-        self.startModules()
-        tokentype = "phone"
-        tokenitself = "+3580001"
-        self.queryToken(tokentype, tokenitself)
-        self.handleResults(tokentype, tokenitself)
 
-        self.stop()
+        result = 200
+        querytype = "phone"
+        token = "+3580000"
+        email = "gatekeeper@example.com"
+        firstName = "Gatekeeper"
+        lastName = "Testuser"
+        nick = "Gatekeeper Test"
+        phone = "+3580000"
+
+        for module in self.action.usable_modules:
+            module.send(result, querytype, token, email, firstName, lastName, nick, phone)
+        for module in self.remotelogger.usable_modules:
+            module.send(result, querytype, token, email, firstName, lastName, nick, phone)
 
     def stop(self):
-        log.debug("Stopping")
-        self.stopModules()
-        log.info("Stopped")
+        print("stop")
 
 gatekeeper = Gatekeeper(config)
 gatekeeper.start()
+gatekeeper.stop()

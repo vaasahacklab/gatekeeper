@@ -108,7 +108,7 @@ class Matrixbot:
             elif result == 480:
                 message = "Gatekeeper: Someone is knocking on the door"
             elif result == 481:
-                message = "Gatekeeper: Member without door access knocked the door."
+                message = "Gatekeeper: \"" + nick + "\" is knocking on the door"
             else:
                 message = None
         return message
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     # Setup logging to stdout
     import logging
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(levelname)s: %(message)s",
         handlers=[
             logging.StreamHandler()
