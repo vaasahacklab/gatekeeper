@@ -1,64 +1,94 @@
 #!/usr/bin/env python3
 
+import os
+import sys
+import json
 import logging
 import requests
+from queue import Queue
 from threading import Thread
 
 __all__ = ["Doorbell"]
 
 class Gatekeeper:
-    def __init__(self, config):
+    def __init__(self):
         self.log = logging.getLogger(__name__.capitalize())
         self.log.debug("Initializing")
         self.server_list = []
+        self.thread_list = []
+        self.message = []
 
-        # Config comes from main gatekeeper
+        # Load config from file from json file with same module name
+        self.log.debug("Loading config file " + __name__.lower() + ".json")
+        try:
+            with open(os.path.join(sys.path[0], __name__.lower() + ".json"), "r") as f:
+                config = json.load(f)
+            f.close()
+        except ValueError as e:
+            f.close()
+            self.log.critical(__name__.lower() + ".json is malformed, got error:\n\t" + str(e))
+            sys.stderr.write(e)
+            raise e
+        except Exception as e:
+            self.log.critical("Failed loading " + __name__.lower() + ".json, got error:\n\t" + str(e))
+            sys.stderr.write(e)
+            raise e
+        
         for key in config:
             self.server_list.append(key)
         if not self.server_list:
             self.log.error("No \"" + __name__ + "\" config parameters found.")
+            sys.exit()
+        self.start()
 
     def start(self):
-        if self.server_list:
-            self.log.debug("Starting")
-            self.log.debug("Started")
+        self.log.debug("Starting")
+        for server in self.server_list:
+            queue = Queue()
+            self.message.append(queue)
+            t = Thread(name=__name__ + ": " + server['name'], target=self._start, args=(server['name'], server['url'], queue))
+            self.thread_list.append(t)
+        for thread in self.thread_list:
+            thread.start()
+        self.log.debug("Started")
+
+    def _start(self, name, url, queue):
+        while True:          
+            message = queue.get()
+            if message is None:
+                queue.task_done()
+                break
+            result = str(message)
+            
+            try:
+                self._send(name, url, result)
+            except Exception as e:
+                self.log.error(name + ": Couldn't send dindong to url \"" + url + "\", got error:\n\t" + str(e))
+            finally:
+                queue.task_done()
 
     def send(self, result, querytype, token, email=None, firstName=None, lastName=None, nick=None, phone=None):
-        if self.server_list:
-            thread_list = []
-            for server in self.server_list:
-                if 200 <= result <= 299:
-                    dooropened = True
-                elif 400 <= result <= 499:
-                    if result == 480:
-                        dooropened = False
-                    elif result == 481:
-                        dooropened = False
-                    else:
-                        dooropened = None
-                else:
-                    dooropened = None
-                if dooropened is not None:
-                    self.log.info(server['name'] + ": Sending dingdong")
-                    t = Thread(name=__name__ + ": " + server['name'], target=self._send, args=(server['name'], server['url'], dooropened))
-                    thread_list.append(t)
-            if thread_list:
-                for thread in thread_list:
-                    thread.start()
-                self.log.debug("Waiting threads to finish")
-                for thread in thread_list:
-                    thread.join()
-                self.log.debug("Threads finished")
+        for queue in self.message:
+            queue.put(str(result))
+
+    def waitthreads(self):
+        self.log.debug("Waiting threads to finish")
+        for thread in self.thread_list:
+            thread.join()
+        self.log.debug("Threads finished")
 
     def stop(self):
-        if self.server_list:
-            self.log.debug("Stopping")
-            self.log.debug("Stopped")
+        self.log.debug("Stopping")
+        for queue in self.message:
+            queue.put(None)
+        for queue in self.message:
+            queue.join()
+        self.waitthreads()
+        self.log.debug("Stopped")
 
-    def _send(self, name, url, dooropened):
-        content = {'dooropened': dooropened}
-        print(str(url), str(dooropened), str(content))
-        self.log.debug(name + ": Sending dindong with dooropened: \"" + str(dooropened) + "\", to url: \"" + str(url) +"\"")
+    def _send(self, name, url, result):
+        content = {'status': result}
+        self.log.debug(name + ": Sending dindong with resultcode: \"" + str(result) + "\", to url: \"" + str(url) +"\"")
         try:
             r = requests.put(url, json=content, timeout=(5, 15))
             if 200 <= r.status_code <= 299:
@@ -73,10 +103,6 @@ class Gatekeeper:
 
 # Test routine if module is run as standalone program instead of imported as module
 if __name__ == "__main__":
-    import os
-    import sys
-    import json
-
     __name__ = "Doorbell"
 
     # Setup logging to stdout
@@ -91,26 +117,6 @@ if __name__ == "__main__":
     log = logging.getLogger(__name__)
 
     log.info("Running standalone, testing \"" + __name__ + "\" Gatekeeper action module")
-
-    # Load config from Gatekeeper config file
-    log.debug("Loading config file")
-    try:
-        with open(os.path.join(sys.path[0], "..", "..", "config.json"), "r") as f:
-            config = json.load(f)
-        f.close()
-    except ValueError as e:
-        f.close()
-        log.critical("config.json is malformed, got error:\n\t" + str(e))
-    except Exception as e:
-        log.critical("Failed loading config file, got error:\n\t" + str(e))
-
-    configlist = []
-    try:
-        for key in config['action'][__name__.lower()]:
-            configlist.append(key)
-    except KeyError as e:
-        log.error("Config section for action \"" + __name__.lower() + "\" does not exist.")
-        raise e
 
     def testdata(mockresult):
         if mockresult == 200:
@@ -149,7 +155,7 @@ if __name__ == "__main__":
             #phone = "+3580002"
         return (mockresult, querytype, token, email, firstName, lastName, nick, phone)
 
-    module = Gatekeeper(configlist)
+    module = Gatekeeper()
     module.send(*testdata(200))
     module.send(*testdata(480))
     module.send(*testdata(481))

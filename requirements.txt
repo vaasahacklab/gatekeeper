@@ -1,8 +1,2 @@
-wheel>=0.34.2
-setuptools>=49.1.0
-PySerial>=3.4
-RPi.GPIO>=0.7.0
-requests>=2.24.0
-paramiko>=2.7.1
-paho-mqtt>=1.5.0
-matrix-nio[e2e]>=0.14.1
+wheel>=0.35.1
+setuptools>=50.3.2
