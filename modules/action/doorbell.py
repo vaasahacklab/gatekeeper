@@ -27,22 +27,17 @@ class Gatekeeper:
         except ValueError as e:
             f.close()
             self.log.critical(__name__.lower() + ".json is malformed, got error:\n\t" + str(e))
-            sys.stderr.write(e)
             raise e
         except Exception as e:
             self.log.critical("Failed loading " + __name__.lower() + ".json, got error:\n\t" + str(e))
-            sys.stderr.write(e)
             raise e
         
         for key in config:
             self.server_list.append(key)
         if not self.server_list:
             self.log.error("No \"" + __name__ + "\" config parameters found.")
-            sys.exit()
-        self.start()
+            sys.exit(1)
 
-    def start(self):
-        self.log.debug("Starting")
         for server in self.server_list:
             queue = Queue()
             self.message.append(queue)
@@ -71,7 +66,7 @@ class Gatekeeper:
         for queue in self.message:
             queue.put(str(result))
 
-    def waitthreads(self):
+    def _waitthreads(self):
         self.log.debug("Waiting threads to finish")
         for thread in self.thread_list:
             thread.join()
@@ -83,20 +78,36 @@ class Gatekeeper:
             queue.put(None)
         for queue in self.message:
             queue.join()
-        self.waitthreads()
+        self._waitthreads()
         self.log.debug("Stopped")
 
     def _send(self, name, url, result):
-        content = {'status': result}
+        content = {'request': result}
         self.log.debug(name + ": Sending dindong with resultcode: \"" + str(result) + "\", to url: \"" + str(url) +"\"")
         try:
-            r = requests.put(url, json=content, timeout=(5, 15))
+            r = requests.put(url, json=content, timeout=(5, 10))
             if 200 <= r.status_code <= 299:
                 self.log.debug(name + ": Dingdong sent successfully")
+            elif r.status_code == 400:
+                if r.reason:
+                    self.log.error(name + ": Got 400 Bad request, check sent content, with reason:\n\t" + str(r.reason))
+                else:
+                    self.log.error(name + ": Got 400 Bad request, check sent content, no reason sent")
             elif r.status_code == 404:
-                self.log.error(name + ": 404 Not found, check url")
+                if r.reason:
+                    self.log.error(name + ": Got 404 Not found, check url, with reason:\n\t" + str(r.reason))
+                else:
+                    self.log.error(name + ": Got 404 Not found, check url, no reason sent")
+            elif r.status_code == 415:
+                if r.reason:
+                    self.log.error(name + ": Got 415 Unsupported Media Type, with reason:\n\t" + str(r.reason))
+                else:
+                    self.log.error(name + ": Got 415 Unsupported Media Type, no reason sent")
             else:
-                self.log.error(name + ": Got unknown error code: \"" + str(r.status_code) + "\", with possible response:\n\t" + str(r))
+                if r.reason:
+                    self.log.error(name + ": Got unexpected error code: \"" + str(r.status_code) + "\", with reason:\n\t" + str(r.reason))
+                else:
+                    self.log.error(name + ": Got unexpected error code: \"" + str(r.status_code) + "\", no reason sent")
             r.connection.close()
         except Exception as e:
             self.log.error(name + ": Failed to send dingdong to: " + str(url) + " with error:\n  " + str(e))
@@ -135,11 +146,6 @@ if __name__ == "__main__":
             lastName = None
             nick = None
             phone = None
-            #email = "GateTest_NotMember@example.com"
-            #firstName = "GatekeeperTest"
-            #lastName = "NotMember"
-            #nick = "GateTest_NotMember"
-            #phone = "+3580001"
         elif mockresult == 481:
             querytype = "phone"
             token = "+3580481"
@@ -148,6 +154,7 @@ if __name__ == "__main__":
             lastName = None
             nick = None
             phone = None
+            ## Support for "member but no dooraccess" style values will likely be supported on later Mulysa
             #email = "GateTest_IsMember_NoAccess@example.com"
             #firstName = "GatekeeperTest"
             #lastName = "IsMember_NoAccess"
@@ -163,4 +170,5 @@ if __name__ == "__main__":
     module.stop()
     
     log.info("Testing finished")
+    sys.exit(0)
 
