@@ -1,0 +1,14 @@
+[
+    {
+        "name": "Public",
+        "url": "https://example.com/keylog/log",
+        "apikey": "secrit",
+        "staff": false
+    },
+    {
+        "name": "Staff",
+        "url": "https://powerful.example.com/keylog/log",
+        "apikey": "topsecrit",
+        "staff": true
+    }
+]
