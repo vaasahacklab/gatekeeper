@@ -117,7 +117,6 @@ if __name__ == "__main__":
     __name__ = "Doorbell"
 
     # Setup logging to stdout
-    import logging
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(levelname)s: %(message)s",
@@ -126,7 +125,6 @@ if __name__ == "__main__":
         ]
     )
     log = logging.getLogger(__name__)
-
     log.info("Running standalone, testing \"" + __name__ + "\" Gatekeeper action module")
 
     def testdata(mockresult):

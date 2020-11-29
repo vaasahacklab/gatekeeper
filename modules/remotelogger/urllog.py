@@ -80,7 +80,6 @@ class Gatekeeper:
         self.log.debug("Stopped")
 
     def _send(self, name, url, apikey, staff, message):
-        
         result = message[0]
         token = message[1]
         nick = message[2]
@@ -111,7 +110,7 @@ class Gatekeeper:
 
         try:
             headers = {'Authorization': 'Bearer ' + apikey}
-            r = requests.post(url, headers=headers, data=content, timeout=(5, 15))
+            r = requests.post(url, headers=headers, json=content, timeout=(5, 15))
             if 200 <= r.status_code <= 299:
                 self.log.debug(name + ": Message sent successfully")
             elif r.status_code == 403:
@@ -138,7 +137,6 @@ if __name__ == "__main__":
     __name__ = "Urllog"
 
     # Setup logging to stdout
-    import logging
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(levelname)s: %(message)s",
@@ -147,7 +145,6 @@ if __name__ == "__main__":
         ]
     )
     log = logging.getLogger(__name__)
-
     log.info("Running standalone, testing \"" + __name__ + "\" Gatekeeper action module")
 
     def testdata(mockresult):

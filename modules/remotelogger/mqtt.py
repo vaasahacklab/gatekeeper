@@ -80,7 +80,6 @@ class Gatekeeper:
         self.log.debug("Stopped")
 
     def _send(self, name, host, staff, message):
-        
         result = message[0]
         querytype = message[1]
         token = message[2]
@@ -132,7 +131,6 @@ if __name__ == "__main__":
     __name__ = "Mqtt"
 
     # Setup logging to stdout
-    import logging
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(levelname)s: %(message)s",
@@ -141,7 +139,6 @@ if __name__ == "__main__":
         ]
     )
     log = logging.getLogger(__name__)
-
     log.info("Running standalone, testing \"" + __name__ + "\" Gatekeeper action module")
 
     def testdata(mockresult):
