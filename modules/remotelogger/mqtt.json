@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Public",
+        "host": "test.mosquitto.org",
+        "staff": false
+    },
+    {
+        "name": "Staff",
+        "host": "test.example.com",
+        "staff": true
+    }
+]
