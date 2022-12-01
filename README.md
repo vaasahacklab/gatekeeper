@@ -15,26 +15,23 @@ DB-9 connector:
    +-------+
 ```
 
-Lock mechanic internal wiring:
+Lock mechanic internal wiring, current setup:
 
 Male DB-9 connector at chassis, all wires soldered at connector inside chassis:
 
+
 ```
-1: Power positive to motor controller (+7V), 1.5mm²
-2: Power negative to motor controller (0V), 1.5mm²  NOTE: microswitches common ground (0.5mm²) connects to here on MC end
-3: Turn left -signal to motor controller, female jumper wire
-4: Turn right -signal to motor controller, female jumper wire
-5: PWM enable -signal to motor controller, female jumper wire
-6: Microswitch motor left endstop, 0.5mm²
-7: Microswitch motor right endstop, 0.5mm²
-8: Microswitch lock left endstop, 0.5mm²
-9: Microswitch lock right endstop, 0.5mm²
+1: Power positive to lock solenoid (+24V), 1.5mm²
+2: Power negative to lock solenoid (+24V), 1.5mm²
+3: Latch open indicator (C, NC, NO) (not installed currently)
+4: Latch open indicator (C, NC, NO) (not installed currently)
+5: Latch open indicator (C, NC, NO) (not installed currently)
 S: Chassis/shielding ground, not entirely neccesary, recommended, we used 2.5mm² wire inside chassis
 ```
 
 Cable:
 
-Pins 1&2 are for power, wires they use can be separate wires as they need to be thick (0.75mm² minimum, preferably more, we used 1.5mm²) in comparison to rest of pins (3-9) which are logic level signals which can be much anything in size, we used shielded CAT 5e patch cable)
+Pins 1&2 are for power, wires they use can be separate wires as they need to be relateively thick (0.5mm² minimum, preferably more, we used 1.5mm²) in comparison to rest of pins (3-9) which are logic level signals which can be much anything in size, we used shielded CAT 5e patch cable)
 
 Cable setup is straight DB-9 male to DB-9 female pin to pin cable, we used following schema:
 
@@ -42,17 +39,8 @@ Cable setup is straight DB-9 male to DB-9 female pin to pin cable, we used follo
 -- Separate 2x1.5mm² cable --
 1: 1.5mm² black
 2: 1.5mm² blue
-
--- CAT 5e cable --
-3: Green
-4: Green-White
-5: Blue
-6: Orange
-7: Orange-White
-8: Brown
-9: Brown-White
 S: Shielding drain wire
-NOTE: Blue-White wire not used
+
 ```
 
 # Software
