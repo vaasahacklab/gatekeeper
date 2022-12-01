@@ -42,16 +42,16 @@ log.debug("Config file loaded.")
 modem_power = 11
 modem_reset = 12
 lock = 36
-lights = 38
-out3 = 32
-out4 = 40
+locklight = 37
+#out3 = 32
+#out4 = 40
 
 # Setup GPIO input pins, GPIO.BOARD
 latch = 29
-lightstatus = 31
-button_open = 33
-in4 = 35
-in5 = 37
+#lightstatus = 31
+button_open = 38
+#in4 = 35
+#in5 = 37
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -163,22 +163,22 @@ class Pin:
 
     # Set up GPIO input channels
     # Light on/off status
-    GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    #GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     # Door latch open/locked status
-    GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
+    #GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    #GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
     GPIO.setup(button_open, GPIO.IN, pull_up_down = GPIO.PUD_UP)
     # Currently unused inputs on input-relay board. initialize them anyway
-    GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    #GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    #GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
 
     # Set up GPIO output channels
     # Lock
     GPIO.setup(lock, GPIO.OUT, initial=GPIO.HIGH)
     log.debug("initialized lock, pin to high")
-    # Lights
-    GPIO.setup(lights, GPIO.OUT, initial=GPIO.HIGH)
-    log.debug("initialized lights, pin to high")
+    # Lock open light
+    GPIO.setup(locklight, GPIO.OUT, initial=GPIO.HIGH)
+    log.debug("initialized door open light, pin to high")
     # Modem power button
     GPIO.setup(modem_power, GPIO.OUT, initial=GPIO.LOW)
     log.debug("initialized modem_power, pin to low")
@@ -187,24 +187,26 @@ class Pin:
     log.debug("initialized modem_reset, pin to low")
 
     # Currently unused outputs on output-relay board, initialize them anyway
-    GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
-    GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
+    #GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
+    #GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
 
   def open_lock(self):
     GPIO.output(lock, GPIO.LOW)
+    self.lights_on()
     log.debug("Opened lock")
 
   def close_lock(self):
     GPIO.output(lock, GPIO.HIGH)
+    self.lights_off()
     log.debug("Closed lock")
 
   def lights_on(self):
-    GPIO.output(lights, GPIO.LOW)
-    log.debug("Lights on")
+    GPIO.output(locklight, GPIO.LOW)
+    log.debug("Door open light on")
 
   def lights_off(self):
-    GPIO.output(lights, GPIO.HIGH)
-    log.debug("Lights off")
+    GPIO.output(locklight, GPIO.HIGH)
+    log.debug("Door open light off")
 
   def read_button_open(self):
     log.debug("Door opening button enabled")
@@ -221,8 +223,8 @@ class Pin:
 
   def send_pulse_lock(self):
     self.open_lock()
-    # Keep pulse high for 5.5 second
-    time.sleep(5.5)
+    # Keep pulse high for X second
+    time.sleep(10)
     self.close_lock()
     log.debug("Lock opening pulse done")
 
@@ -521,18 +523,19 @@ class GateKeeper:
   def stop_gatekeeping(self):
     # Setup threads
     closelock = threading.Thread(target=self.pin.close_lock, args=())
-    lights_off = threading.Thread(target=self.pin.lights_off, args=())
+    #lights_off = threading.Thread(target=self.pin.lights_off, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
     self.read_rfid_loop = False         # Tells RFID-reading loop to stop
     self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
+    self.pin.enable_button = False      # Tells button reader to stop
     closelock.start()                   # Close lock
-    lights_off.start()                   # Turn off lights
+    #lights_off.start()                   # Turn off lights
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
     self.linestatus.join()              # Wait linestatus thread to finish
     modemoff.start()                    # Tell modem to power off
     closelock.join()                    # Wait close lock to finish
-    lights_off.join()                    # Wait lights off to finish
+    #lights_off.join()                    # Wait lights off to finish
     modemoff.join()                     # Wait modem off to finish
     self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.load_whitelist_interval.join() # Wait whitelist loader loop to end
