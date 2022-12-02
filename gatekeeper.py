@@ -13,7 +13,6 @@ from errno import EINTR     # Read interrupt
 import RPi.GPIO as GPIO     # For using Raspberry Pi GPIO
 import threading            # For enabling multitasking
 import requests             # HTTP library
-import MFRC522              # RFID reader
 import json                 # JSON parser, for config file
 from shutil import copyfile # File copying
 import paramiko             # SSH access library
@@ -43,15 +42,11 @@ modem_power = 11
 modem_reset = 12
 lock = 36
 locklight = 37
-#out3 = 32
-#out4 = 40
 
 # Setup GPIO input pins, GPIO.BOARD
 latch = 29
-#lightstatus = 31
-button_open = 38
-#in4 = 35
-#in5 = 37
+button_open_lock = 38
+switch_keep_lock_open = 40
 
 # Setup modem data and control serial port settings (Todo: Make own python module for modem handling stuff?)
 # Data port (Can be same or diffirent as command port)
@@ -162,23 +157,24 @@ class Pin:
     GPIO.setmode(GPIO.BOARD)
 
     # Set up GPIO input channels
-    # Light on/off status
-    #GPIO.setup(lightstatus, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    # Door latch open/locked status
-    #GPIO.setup(latch, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    #GPIO.add_event_detect(latch, GPIO.BOTH, callback=self.latch_moved, bouncetime=500)
-    GPIO.setup(button_open, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    # Currently unused inputs on input-relay board. initialize them anyway
-    #GPIO.setup(in4, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-    #GPIO.setup(in5, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    # Lock opening button
+    GPIO.setup(button_open_lock, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    log.debug("initialized lock opening button input, using pull up")
+    # Keep lock unlocked switch
+    GPIO.setup(switch_keep_lock_open, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+    log.debug("initialized keep lock open switch input, using pull up")
+
+    # Event detection for button/switch
+    GPIO.add_event_detect(button_open_lock, GPIO.BOTH, callback=self.handle_lock, bouncetime=50)
+    GPIO.add_event_detect(switch_keep_lock_open, GPIO.BOTH, callback=self.handle_lock, bouncetime=50)
 
     # Set up GPIO output channels
     # Lock
     GPIO.setup(lock, GPIO.OUT, initial=GPIO.HIGH)
     log.debug("initialized lock, pin to high")
-    # Lock open light
+    # Lock open indicator light
     GPIO.setup(locklight, GPIO.OUT, initial=GPIO.HIGH)
-    log.debug("initialized door open light, pin to high")
+    log.debug("initialized lock open light, pin to high")
     # Modem power button
     GPIO.setup(modem_power, GPIO.OUT, initial=GPIO.LOW)
     log.debug("initialized modem_power, pin to low")
@@ -186,40 +182,51 @@ class Pin:
     GPIO.setup(modem_reset, GPIO.OUT, initial=GPIO.LOW)
     log.debug("initialized modem_reset, pin to low")
 
-    # Currently unused outputs on output-relay board, initialize them anyway
-    #GPIO.setup(out3, GPIO.OUT, initial=GPIO.HIGH)
-    #GPIO.setup(out4, GPIO.OUT, initial=GPIO.HIGH)
-
   def open_lock(self):
     GPIO.output(lock, GPIO.LOW)
-    self.lights_on()
     log.debug("Opened lock")
+    self.lock_open_light_on()
 
   def close_lock(self):
     GPIO.output(lock, GPIO.HIGH)
-    self.lights_off()
     log.debug("Closed lock")
+    self.lock_open_light_off()
 
-  def lights_on(self):
+  def lock_open_light_on(self):
     GPIO.output(locklight, GPIO.LOW)
-    log.debug("Door open light on")
+    log.debug("Lock open light on")
 
-  def lights_off(self):
+  def lock_open_light_off(self):
     GPIO.output(locklight, GPIO.HIGH)
-    log.debug("Door open light off")
+    log.debug("Lock open light off")
 
-  def read_button_open(self):
-    log.debug("Door opening button enabled")
-    self.enable_button = True
-    while self.enable_button:
-      channel = GPIO.wait_for_edge(button_open, GPIO.FALLING, timeout=1000)
-      if channel is None:
-        pass
-      else:
-        log.info("Door opening button pressed")
+  def handle_lock(self, channel):
+    log.debug("Handle lock: got channel/GPIO: " + str(channel))
+
+    if channel == switch_keep_lock_open:
+      if not GPIO.input(switch_keep_lock_open):
+        log.info("Keep lock open switch turned on")
+        self.open_lock()
+      if GPIO.input(switch_keep_lock_open):
+        log.info("Keep lock open switch turned off")
+        self.close_lock()
+
+    if channel == button_open_lock:
+      if not GPIO.input(button_open_lock):
+        if not GPIO.input(switch_keep_lock_open):
+          log.debug("Lock opening button pressed, keep lock open switch already on, pass")
+        if GPIO.input(switch_keep_lock_open):
+          log.info("Lock opening button pressed")
+          self.send_pulse_lock()
+      if GPIO.input(button_open_lock):
+        log.debug("Lock opening button released")
+
+    if channel == "modem":
+      if not GPIO.input(switch_keep_lock_open):
+        log.debug("Got modem call, keep lock open switch already on, pass")
+      if GPIO.input(switch_keep_lock_open):
+        log.info("Got modem call")
         self.send_pulse_lock()
-        #log.error("Door opening button disabled, slightest electrical noise triggers stuff")
-    log.debug("Door opening button disabled")
 
   def send_pulse_lock(self):
     self.open_lock()
@@ -228,34 +235,18 @@ class Pin:
     self.close_lock()
     log.debug("Lock opening pulse done")
 
-  def latch_moved(channel, event):
-    if GPIO.input(latch):     # If latch GPIO == 1. When latch is opened, sensor drops to 0, relay opens, GPIO pull-up makes GPIO 1
-      log.debug('Door latch opened')
-    else:                     # If latch GPIO != 1. When latch is closed, sensor goes to 1, relay closes, GPIO goes 0 trough raspberry GND-pin
-      log.debug('Door latch closed')
-
 class GateKeeper:
-  # Introduce program-loop parameters, initially disabled
-  wait_for_tag = False
-  read_rfid_loop = False
   linestatus = False
   load_whitelist_loop = False
-  enable_button = False
 
   def __init__(self, config):
-    self.rfidwhitelist = {}         # Introduce whitelist parameters
     self.whitelist = {}
-    self.read_rfid_loop = True      # Enable reading RFID
-    self.load_whitelist_loop = True # Enable refreshing whitelist perioidically
+#    self.load_whitelist_loop = True # Enable refreshing whitelist perioidically
     self.config = config
     self.pin = Pin()                # GPIO pins
-    self.button = threading.Thread(target=self.pin.read_button_open, args=())
-    self.button.start()             # Read door opening button
     self.read_whitelist()           # Read whitelist on startup
     self.load_whitelist_interval = threading.Thread(target=self.load_whitelist_interval, args=())
     self.load_whitelist_interval.start() # Update whitelist perioidically
-    self.wait_for_tag = threading.Thread(target=self.wait_for_tag, args=())
-    self.wait_for_tag.start()       # Start RFID-tag reader routine
     self.modem = Modem()
     self.modem.power_on()
     self.modem.enable_caller_id()
@@ -322,8 +313,6 @@ class GateKeeper:
         jsonList = json.load(data_file)
         self.whitelist.clear()
         log.debug("Cleared old phonenumber whitelist from RAM")
-        self.rfidwhitelist.clear()
-        log.debug("Cleared old RFID-number whitelist from RAM")
 
         for key, value in jsonList.items():
           if "PhoneNumber" in value:
@@ -334,12 +323,7 @@ class GateKeeper:
                 phoneNumber = phoneNumber[1:]     # Only remove the '+'
               self.whitelist[phoneNumber] = value["nick"]
 
-          if "RFID" in value:
-            for rfidTag in value["RFID"]:
-              self.rfidwhitelist[rfidTag] = value["nick"]
-
         log.debug("Whitelist\n" + pformat(self.whitelist))
-        log.debug("RFID Whitelist\n " + pformat(self.rfidwhitelist))
 
     except Exception as e:
       log.error("Failed to read whitelist from " + whitelistFileName + ", error:\n" + str(e) + "\nExiting Gatekeeper")
@@ -388,82 +372,26 @@ class GateKeeper:
         log.debug("Not connected with line \n"+buffer)
         self.modem.reset()
 
-  def wait_for_tag(self):
-    log.debug("Started RFID-tag reader")
-    MIFAREReader = MFRC522.MFRC522()
-    # Set RFID-antenna gain to maximum, 48dB, register value of 0x07
-    MIFAREReader.ClearBitMask(MIFAREReader.RFCfgReg, (0x07<<4))
-    MIFAREReader.SetBitMask(MIFAREReader.RFCfgReg, (0x07<<4))
-    while self.read_rfid_loop:
-      time.sleep(1)
-      # Scan for cards
-      (status,TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
-      # If a card is found
-      if status == MIFAREReader.MI_OK:
-        log.debug("RFID Card detected")
-        # Get the UID of the card
-        (status,uid) = MIFAREReader.MFRC522_Anticoll()
-        # If we have the UID, continue
-        if status == MIFAREReader.MI_OK:
-          tag_id = str(uid[0])+str(uid[1])+str(uid[2])+str(uid[3])
-          self.handle_rfid(tag_id)
-    log.debug("Stopped RFID-tag reader")
-
-  def handle_rfid(self,tag_id):
-    if tag_id in self.rfidwhitelist:
-      # Setup threads
-      lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
-      url_log = threading.Thread(target=self.url_log, args=(self.rfidwhitelist[tag_id],tag_id))
-      matrix_message = threading.Thread(target=self.matrix_message, args=(self.rfidwhitelist[tag_id],tag_id))
-      mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.rfidwhitelist[tag_id],tag_id))
-      # Execute letting people in -tasks
-      lock_pulse.start()
-      url_log.start()
-      matrix_message.start()
-      mqtt_log.start()
-      log.info("Opened the gate for RFID tag " + self.rfidwhitelist[tag_id] + " (" + tag_id + ").")
-      # Wait tasks to finish
-      lock_pulse.join()
-      url_log.join()
-      matrix_message.join()
-      mqtt_log.join()
-    else:
-      log.info("Did not open the gate for RFID tag "  + tag_id + ", tag UID is not kown.")
-      # Setup threads
-      dingdong = threading.Thread(target=self.dingdong, args=())
-      url_log = threading.Thread(target=self.url_log, args=("DENIED",tag_id))
-      matrix_message = threading.Thread(target=self.matrix_message, args=("DENIED",tag_id))
-      mqtt_log = threading.Thread(target=self.mqtt_log, args=("DENIED",tag_id))
-      # Ring doorbell and log denied RFID tag
-      dingdong.start()
-      url_log.start()
-      matrix_message.start()
-      mqtt_log.start()
-      # Wait tasks to finish
-      dingdong.join()
-      url_log.join()
-      matrix_message.join()
-      mqtt_log.join()
 
   def handle_call(self,number):
     log.debug("Incoming call from: " + str(number))
     if number in self.whitelist:
       # Setup threads
       hangup = threading.Thread(target=self.modem.hangup, args=())
-      lock_pulse = threading.Thread(target=self.pin.send_pulse_lock, args=())
+      handle_lock = threading.Thread(target=self.pin.handle_lock, args=("modem",))
       url_log = threading.Thread(target=self.url_log, args=(self.whitelist[number],number))
       matrix_message = threading.Thread(target=self.matrix_message, args=(self.whitelist[number],number))
       mqtt_log = threading.Thread(target=self.mqtt_log, args=(self.whitelist[number],number))
       # Execute letting people in -tasks
       hangup.start()
-      lock_pulse.start()
+      handle_lock.start()
       url_log.start()
       matrix_message.start()
       mqtt_log.start()
       log.info("Opened the gate for " + self.whitelist[number] + " (" + number + ").")
       # Wait tasks to finish
       hangup.join()
-      lock_pulse.join()
+      handle_lock.join()
       url_log.join()
       matrix_message.join()
       mqtt_log.join()
@@ -491,7 +419,7 @@ class GateKeeper:
         if line == "NO CARRIER":
           log.debug("Non whitelist caller hung up")
           break
-      # Wait doorbell and log precess to finish
+      # Wait doorbell and log process to finish
       dingdong.join()
       url_log.join()
       matrix_message.join()
@@ -501,7 +429,6 @@ class GateKeeper:
     signum = 0                          # Set error status as clean
     try:
       self.wait_for_call()
-      self.wait_for_tag()
     except Exception as e:
       log.debug("error:\n" + str(e))
     except select.error as v:
@@ -523,23 +450,15 @@ class GateKeeper:
   def stop_gatekeeping(self):
     # Setup threads
     closelock = threading.Thread(target=self.pin.close_lock, args=())
-    #lights_off = threading.Thread(target=self.pin.lights_off, args=())
     modemoff = threading.Thread(target=self.modem.power_off, args=())
     # Do shutting down tasks
-    self.read_rfid_loop = False         # Tells RFID-reading loop to stop
-    self.load_whitelist_loop = False    # Tells whitelist loader loop to stop
-    self.pin.enable_button = False      # Tells button reader to stop
     closelock.start()                   # Close lock
-    #lights_off.start()                   # Turn off lights
     self.modem.linestatus_loop = False  # Tells modem linestatus check loop to stop
     self.linestatus.join()              # Wait linestatus thread to finish
     modemoff.start()                    # Tell modem to power off
     closelock.join()                    # Wait close lock to finish
-    #lights_off.join()                    # Wait lights off to finish
     modemoff.join()                     # Wait modem off to finish
-    self.wait_for_tag.join()            # Wait RFID tag reading loop to end
     self.load_whitelist_interval.join() # Wait whitelist loader loop to end
-    self.button.join()                  # Wait button reader loop to end
 
   def exit_gatekeeper(self, signum):
     GPIO.cleanup()                      # Undo all GPIO setups we have done
