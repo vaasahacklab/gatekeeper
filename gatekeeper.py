@@ -37,6 +37,9 @@ except Exception as e:
 
 log.debug("Config file loaded.")
 
+# How many seconds keeping door lock open in "pulse"
+holdopentime = 10
+
 # Setup GPIO output pins, GPIO.BOARD
 modem_power = 11
 modem_reset = 12
@@ -165,8 +168,8 @@ class Pin:
     log.debug("initialized keep lock open switch input, using pull up")
 
     # Event detection for button/switch
-    GPIO.add_event_detect(button_open_lock, GPIO.BOTH, callback=self.handle_lock, bouncetime=50)
-    GPIO.add_event_detect(switch_keep_lock_open, GPIO.BOTH, callback=self.handle_lock, bouncetime=50)
+    GPIO.add_event_detect(button_open_lock, GPIO.BOTH, callback=self.handle_lock, bouncetime=100)
+    GPIO.add_event_detect(switch_keep_lock_open, GPIO.BOTH, callback=self.handle_lock, bouncetime=20)
 
     # Set up GPIO output channels
     # Lock
@@ -229,10 +232,15 @@ class Pin:
         self.send_pulse_lock()
 
   def send_pulse_lock(self):
+    log.debug("Keeping lock open for " + str(holdopentime) + " seconds")
     self.open_lock()
-    # Keep pulse high for X second
-    time.sleep(10)
-    self.close_lock()
+    time.sleep(holdopentime)
+    log.debug("Keep lock open pulse time elapsed")
+    if not GPIO.input(switch_keep_lock_open):
+      log.debug("Keep lock open switch is on, don't close lock")
+    if GPIO.input(switch_keep_lock_open):
+      log.debug("Closing lock")
+      self.close_lock()
     log.debug("Lock opening pulse done")
 
 class GateKeeper:
